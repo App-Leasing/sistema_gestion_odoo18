@@ -1,0 +1,347 @@
+        <!-- PASO 1: SELECCIÓN Y PREFLIGHT CHECK -->
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+          <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+            <div class="flex items-center gap-2 text-slate-900 font-bold text-base">
+              <i class="fa-solid fa-truck-ramp-box text-amber-600"></i>
+              <span>Paso 1: Seleccionar Recepción de Mercadería (stock.picking)</span>
+            </div>
+            <span
+              class="text-xs px-2.5 py-1 bg-amber-50 text-amber-800 rounded-md font-mono font-medium border border-amber-200">
+              Estado: done
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+            <div class="md:col-span-8 relative">
+              <label class="block text-xs font-bold text-slate-700 uppercase mb-1 flex items-center justify-between">
+                <span>Albarán de Recepción en Odoo (stock.picking) *</span>
+                <span class="text-[11px] text-amber-700 font-semibold normal-case">Búsqueda rápida por Código, OC o Proveedor</span>
+              </label>
+
+              <!-- Tarjeta de Selección Activa -->
+              <div x-show="selectedPickingObj" class="p-3 bg-amber-50/80 border border-amber-300 rounded-xl flex items-center justify-between gap-3 shadow-sm">
+                <div class="flex items-center gap-3">
+                  <div class="w-9 h-9 rounded-lg bg-amber-600 text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                    <i class="fa-solid fa-box-archive"></i>
+                  </div>
+                  <div class="text-xs">
+                    <div class="font-bold text-slate-900 flex items-center gap-2">
+                      <span class="text-sm font-extrabold text-amber-950 font-mono" x-text="selectedPickingObj ? selectedPickingObj.name : ''"></span>
+                      <span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-mono font-bold">done</span>
+                    </div>
+                    <div class="text-slate-600 font-mono text-[11px] mt-0.5"
+                         x-text="`Origen: ${selectedPickingObj ? (selectedPickingObj.origin || 'S/O') : ''} | OC: ${selectedPickingObj && Array.isArray(selectedPickingObj.purchase_id) ? selectedPickingObj.purchase_id[1] : (selectedPickingObj && selectedPickingObj.purchase_id ? selectedPickingObj.purchase_id : 'N/A')}`"></div>
+                    <div class="text-slate-400 text-[10px]"
+                         x-text="`Fecha: ${selectedPickingObj && selectedPickingObj.date_done ? selectedPickingObj.date_done.substring(0, 16) : 'N/A'} | Proveedor: ${selectedPickingObj && Array.isArray(selectedPickingObj.partner_id) ? selectedPickingObj.partner_id[1] : 'N/A'}`"></div>
+                  </div>
+                </div>
+                <button type="button" @click="clearSelectedPicking()"
+                        class="text-xs px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-rose-600 hover:border-rose-300 font-bold flex items-center gap-1.5 shadow-sm transition-all">
+                  <i class="fa-solid fa-rotate-left text-slate-400"></i>
+                  <span>Cambiar</span>
+                </button>
+              </div>
+
+              <!-- Input de Búsqueda Instantánea con Autocomplete (si no hay seleccionado o quiere cambiar) -->
+              <div x-show="!selectedPickingObj" class="relative">
+                <div class="relative">
+                  <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                  </span>
+                  <input type="text"
+                         x-model="pickingSearchTerm"
+                         @focus="isPickingDropdownOpen = true"
+                         @keydown.escape="isPickingDropdownOpen = false"
+                         @keydown.enter.prevent="searchRemotePickings()"
+                         placeholder="Escribe para filtrar al instante: ej. ATACD, 00005, OC00561, 478, Order10..."
+                         class="w-full pl-10 pr-24 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500 text-sm font-semibold text-slate-800 bg-white placeholder:font-normal placeholder:text-slate-400 shadow-sm">
+                  <button type="button"
+                          @click="searchRemotePickings()"
+                          :disabled="isSearchingRemotePickings || !pickingSearchTerm"
+                          title="Buscar en toda la base de datos de Odoo"
+                          class="absolute inset-y-1 right-1 px-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all">
+                    <template x-if="isSearchingRemotePickings">
+                      <i class="fa-solid fa-spinner fa-spin"></i>
+                    </template>
+                    <template x-if="!isSearchingRemotePickings">
+                      <i class="fa-solid fa-cloud-arrow-down"></i>
+                    </template>
+                    <span>En Odoo</span>
+                  </button>
+                </div>
+
+                <!-- Panel Flotante de Resultados Instantáneos -->
+                <div x-show="isPickingDropdownOpen"
+                     @click.outside="isPickingDropdownOpen = false"
+                     class="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-72 overflow-y-auto divide-y divide-slate-100">
+                  <div class="p-2.5 bg-slate-50 text-[11px] text-slate-500 font-semibold flex items-center justify-between sticky top-0 border-b border-slate-100">
+                    <span class="flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                      <span x-text="`${filteredPickings.length} recepciones disponibles`"></span>
+                    </span>
+                    <button type="button" @click="isPickingDropdownOpen = false" class="text-slate-400 hover:text-slate-600 text-xs px-1">
+                      <i class="fa-solid fa-xmark"></i>
+                    </button>
+                  </div>
+                  <template x-for="p in filteredPickings" :key="p.id">
+                    <button type="button"
+                            @click="selectPicking(p)"
+                            class="w-full p-3 text-left hover:bg-amber-50/70 flex items-center justify-between gap-3 transition-colors border-l-2 border-transparent hover:border-amber-500">
+                      <div class="text-xs space-y-0.5">
+                        <div class="font-bold text-slate-900 flex items-center gap-2">
+                          <span class="font-mono text-amber-950 font-bold" x-text="p.name"></span>
+                          <span class="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded text-[10px] font-mono">done</span>
+                        </div>
+                        <div class="text-slate-600 text-[11px] font-mono"
+                             x-text="`Origen: ${p.origin || 'S/O'} | OC: ${Array.isArray(p.purchase_id) ? p.purchase_id[1] : (p.purchase_id || 'N/A')}`"></div>
+                        <div class="text-slate-400 text-[10px]"
+                             x-text="`Fecha: ${p.date_done ? p.date_done.substring(0, 10) : 'N/A'} | Proveedor: ${Array.isArray(p.partner_id) ? p.partner_id[1] : 'N/A'}`"></div>
+                      </div>
+                      <span class="text-xs text-amber-800 font-bold px-2.5 py-1 bg-amber-100/70 hover:bg-amber-200 rounded-lg flex items-center gap-1 shrink-0">
+                        <span>Elegir</span>
+                        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                      </span>
+                    </button>
+                  </template>
+                  <div x-show="filteredPickings.length === 0" class="p-4 text-center text-xs text-slate-500 space-y-2">
+                    <p>No se encontraron recepciones locales con "<b x-text="pickingSearchTerm"></b>".</p>
+                    <button type="button" @click="searchRemotePickings()" class="px-3 py-1.5 bg-amber-600 text-white rounded-lg font-bold text-xs">
+                      Buscar directamente en todo Odoo
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="md:col-span-4 flex gap-2">
+              <button type="button" @click="runPreflight()" :disabled="!selectedPickingId || isPreflightLoading"
+                class="flex-1 py-2.5 px-4 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all">
+                <template x-if="isPreflightLoading">
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                </template>
+                <template x-if="!isPreflightLoading">
+                  <i class="fa-solid fa-magnifying-glass-chart"></i>
+                </template>
+                <span>Auditar Recepción (Preflight)</span>
+              </button>
+              <button type="button" @click="loadLCPickings()" title="Recargar recepciones"
+                class="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">
+                <i class="fa-solid fa-rotate"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- RESULTADO DEL PREFLIGHT -->
+          <div x-show="preflightData" class="mt-4 pt-4 border-t border-slate-100">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <template x-if="preflightData && preflightData.can_proceed">
+                  <span
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span>Recepción Validada: Lista para Costeo</span>
+                  </span>
+                </template>
+                <template x-if="preflightData && !preflightData.can_proceed">
+                  <span
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>Pesos Faltantes Detectados: Requiere Corrección</span>
+                  </span>
+                </template>
+              </div>
+              <div class="text-xs text-slate-500 font-mono">
+                Total Líneas: <b class="text-slate-800" x-text="preflightData ? preflightData.total_moves : 0"></b> |
+                Unidades: <b class="text-slate-800" x-text="preflightData ? preflightData.total_units : 0"></b>
+              </div>
+            </div>
+
+            <!-- CENTRO DE CONTROL Y ASIGNACIÓN RÁPIDA DE PESOS -->
+            <div x-show="preflightData && preflightData.products && preflightData.products.length > 0" class="mt-4 pt-3 border-t border-slate-200">
+              
+              <!-- Cabecera del Gestor de Pesos -->
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3">
+                <div class="flex items-center gap-2.5">
+                  <span class="p-2 bg-indigo-100 text-indigo-700 rounded-xl text-base shadow-xs">
+                    <i class="fa-solid fa-scale-balanced"></i>
+                  </span>
+                  <div>
+                    <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Gestión & Asignación Rápida de Pesos Unitarios</h4>
+                    <p class="text-[11px] text-slate-500">Carga masiva desde Excel, asignación por modelo o ajuste individual sin flechas molestas</p>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <button type="button" @click="saveUpdatedWeights()"
+                    class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-sm transition-all">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    <span>Guardar Pesos en Odoo & Revalidar</span>
+                  </button>
+                  <button type="button" @click="resetWeightsToOdoo()" title="Restablecer a pesos originales de Odoo"
+                    class="p-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-700 rounded-xl text-xs transition-all shadow-xs">
+                    <i class="fa-solid fa-rotate-left"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Pestañas de Modo de Asignación -->
+              <div class="bg-slate-100 p-1 rounded-xl flex flex-wrap gap-1 mb-3 text-xs">
+                <button type="button" @click="weightEntryMode = 'bulk'"
+                  :class="weightEntryMode === 'bulk' ? 'bg-white text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'"
+                  class="flex-1 min-w-[130px] py-1.5 px-3 rounded-lg flex items-center justify-center gap-2 transition-all">
+                  <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                  <span>1. Pegar Masivo (Excel)</span>
+                </button>
+                <button type="button" @click="weightEntryMode = 'model'"
+                  :class="weightEntryMode === 'model' ? 'bg-white text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'"
+                  class="flex-1 min-w-[130px] py-1.5 px-3 rounded-lg flex items-center justify-center gap-2 transition-all">
+                  <i class="fa-solid fa-tags text-indigo-500"></i>
+                  <span>2. Asignar por Modelo</span>
+                </button>
+                <button type="button" @click="weightEntryMode = 'manual'"
+                  :class="weightEntryMode === 'manual' ? 'bg-white text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'"
+                  class="flex-1 min-w-[130px] py-1.5 px-3 rounded-lg flex items-center justify-center gap-2 transition-all">
+                  <i class="fa-solid fa-list-check text-indigo-500"></i>
+                  <span>3. Ver / Editar Productos</span>
+                </button>
+              </div>
+
+              <!-- MODO 1: PEGAR MASIVO DESDE EXCEL -->
+              <div x-show="weightEntryMode === 'bulk'" class="p-4 bg-indigo-50/40 border border-indigo-100 rounded-xl space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div class="text-slate-700 font-bold flex items-center gap-1.5">
+                    <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                    <span>Copia columnas de tu Excel y pégalas aquí directamente:</span>
+                  </div>
+                  <button type="button" @click="pasteWeightsFromClipboard()"
+                    class="px-3 py-1 bg-white hover:bg-slate-50 border border-slate-300 text-indigo-700 font-bold rounded-lg flex items-center gap-1.5 shadow-xs transition-all">
+                    <i class="fa-solid fa-clipboard"></i>
+                    <span>Pegar del Portapapeles (1 Clic)</span>
+                  </button>
+                </div>
+
+                <div class="relative">
+                  <textarea x-model="bulkWeightsText" rows="4"
+                    placeholder="Pega aquí directamente desde Excel (Ctrl + V)...&#10;&#10;Formatos reconocidos automáticamente:&#10;• 2 Columnas: Código o Modelo [TAB] Peso (ej: CEL-OUK-C2-BLK 0.422  o  WP55 0.690)&#10;• 1 Columna: Lista vertical de pesos en el orden del albarán (ej: 0.422 enter 0.424 enter 0.690...)"
+                    class="w-full p-3 font-mono text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white shadow-inner"></textarea>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <div class="text-[11px] text-slate-500 flex items-center gap-2">
+                    <span class="inline-block w-2 h-2 rounded-full bg-indigo-500"></span>
+                    <span>Admite comas decimales (0,422) y puntos (0.422). Detecta modelos y nombres parciales.</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button type="button" @click="bulkWeightsText = ''" x-show="bulkWeightsText"
+                      class="px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-700">
+                      Limpiar
+                    </button>
+                    <button type="button" @click="applyBulkWeightsFromText()"
+                      class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-sm transition-all">
+                      <i class="fa-solid fa-bolt"></i>
+                      <span>Procesar & Asignar Pesos</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Feedback del pegado masivo -->
+                <div x-show="bulkWeightsFeedback" class="p-3 rounded-xl text-xs flex items-center justify-between gap-2"
+                  :class="bulkWeightsFeedback && bulkWeightsFeedback.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'">
+                  <div class="flex items-center gap-2">
+                    <i class="fa-solid" :class="bulkWeightsFeedback && bulkWeightsFeedback.type === 'success' ? 'fa-circle-check text-emerald-600' : 'fa-circle-xmark text-rose-600'"></i>
+                    <span x-text="bulkWeightsFeedback ? bulkWeightsFeedback.message : ''"></span>
+                  </div>
+                  <button type="button" @click="bulkWeightsFeedback = null" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- MODO 2: ASIGNAR RÁPIDO POR MODELO -->
+              <div x-show="weightEntryMode === 'model'" class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <i class="fa-solid fa-tags text-indigo-600"></i>
+                    <span>Modelos detectados en este albarán (asigna el peso a todas las variantes con 1 clic):</span>
+                  </div>
+                  <div class="text-[11px] text-slate-500 font-mono">
+                    <b x-text="getDetectedModels().length"></b> modelos agrupados
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-64 overflow-y-auto pr-1">
+                  <template x-for="m in getDetectedModels()" :key="m.model">
+                    <div class="p-2.5 bg-white rounded-xl border border-slate-200 shadow-xs flex items-center justify-between gap-2">
+                      <div class="text-xs min-w-0">
+                        <div class="font-bold text-slate-900 truncate" x-text="m.model"></div>
+                        <div class="text-[10px] text-slate-400 font-mono" x-text="`${m.count} ${m.count === 1 ? 'producto' : 'variantes'}`"></div>
+                        <div class="text-[10px] text-slate-500 mt-0.5" x-text="`Odoo: ${m.currentWeight} Kg`"></div>
+                      </div>
+                      <div class="flex items-center gap-1.5 shrink-0">
+                        <input type="text"
+                          :value="modelWeightInputs[m.model] !== undefined ? modelWeightInputs[m.model] : (m.editedWeight || m.currentWeight || '')"
+                          @input="modelWeightInputs[m.model] = $event.target.value"
+                          placeholder="0.000"
+                          class="w-16 px-2 py-1 text-xs border border-slate-300 rounded-lg font-bold text-slate-800 text-right focus:ring-1 focus:ring-indigo-500">
+                        <button type="button"
+                          @click="applyWeightToModel(m.model, modelWeightInputs[m.model] !== undefined ? modelWeightInputs[m.model] : (m.editedWeight || m.currentWeight))"
+                          title="Aplicar peso a todas las variantes de este modelo"
+                          class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs transition-all">
+                          <i class="fa-solid fa-check text-[10px]"></i>
+                          <span>Fijar</span>
+                        </button>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+              <!-- MODO 3: VER / EDITAR PRODUCTOS INDIVIDUALES CON BUSCADOR -->
+              <div x-show="weightEntryMode === 'manual'" class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <!-- Buscador en tiempo real -->
+                  <div class="relative flex-1 max-w-md">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-xs">
+                      <i class="fa-solid fa-magnifying-glass"></i>
+                    </span>
+                    <input type="text" x-model="productFilterTerm" placeholder="Filtrar por código o nombre (ej: WP55, C2, 256GB)..."
+                      class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500 bg-white">
+                  </div>
+
+                  <div class="text-xs text-slate-500 font-mono">
+                    Mostrando: <b class="text-slate-800" x-text="filteredPreflightProducts().length"></b> de <span x-text="preflightData.products.length"></span> productos
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                  <template x-for="p in filteredPreflightProducts()" :key="p.id">
+                    <div class="p-2.5 bg-white rounded-xl border text-xs space-y-1.5 shadow-xs transition-all"
+                      :class="editedWeights[p.code || String(p.id)] !== undefined && Math.abs(editedWeights[p.code || String(p.id)] - (p.weight || 0)) > 0.0001 ? 'border-emerald-300 ring-1 ring-emerald-300 bg-emerald-50/20' : 'border-slate-200'">
+                      <div class="font-bold text-slate-800 truncate" x-text="p.name" :title="p.name"></div>
+                      <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                        <span class="truncate" x-text="`Cód: ${p.code || 'S/C'}`"></span>
+                        <template x-if="editedWeights[p.code || String(p.id)] !== undefined && Math.abs(editedWeights[p.code || String(p.id)] - (p.weight || 0)) > 0.0001">
+                          <span class="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded font-bold font-sans">Editado</span>
+                        </template>
+                      </div>
+                      <div class="flex items-center justify-between pt-1 border-t border-slate-100">
+                        <span class="text-[11px] text-slate-500">Odoo: <b x-text="p.weight"></b> Kg</span>
+                        <div class="flex items-center gap-1">
+                          <input type="text"
+                            :value="editedWeights[p.code || String(p.id)] !== undefined ? editedWeights[p.code || String(p.id)] : (p.weight || 0.0)"
+                            @input="editedWeights[p.code || String(p.id)] = parseNum($event.target.value)"
+                            placeholder="0.000"
+                            class="w-20 px-1.5 py-0.5 text-xs border rounded-lg font-bold text-slate-800 focus:ring-1 focus:ring-indigo-500 text-right"
+                            :class="editedWeights[p.code || String(p.id)] !== undefined && Math.abs(editedWeights[p.code || String(p.id)] - (p.weight || 0)) > 0.0001 ? 'border-emerald-400 bg-emerald-50 text-emerald-950' : 'border-slate-300'">
+                          <span class="text-[10px] text-slate-400 font-bold">Kg</span>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+

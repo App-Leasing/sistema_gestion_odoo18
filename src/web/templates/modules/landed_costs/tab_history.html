@@ -1,0 +1,73 @@
+      <!-- SUB-TAB 3: HISTORIAL & DIAGNÓSTICO -->
+      <div x-show="lcSubTab === 'history'" class="space-y-6">
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+          <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+            <div class="flex items-center gap-2 text-slate-900 font-bold text-base">
+              <i class="fa-solid fa-history text-amber-600"></i>
+              <span>Historial de Costos en Destino (stock.landed.cost)</span>
+            </div>
+            <button type="button" @click="loadLCHistory()"
+              class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1.5">
+              <i class="fa-solid fa-rotate"></i>
+              <span>Actualizar</span>
+            </button>
+          </div>
+
+          <div class="overflow-x-auto border border-slate-200 rounded-xl">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead class="bg-slate-100 text-slate-600 uppercase font-semibold text-[10px]">
+                <tr>
+                  <th class="p-2.5">ID</th>
+                  <th class="p-2.5">Referencia</th>
+                  <th class="p-2.5">Fecha</th>
+                  <th class="p-2.5">Estado</th>
+                  <th class="p-2.5 text-right">Peso Total</th>
+                  <th class="p-2.5 text-right">Cambio Gastos</th>
+                  <th class="p-2.5 text-right">Monto Total</th>
+                  <th class="p-2.5 text-center">Diagnóstico</th>
+                  <th class="p-2.5 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 bg-white">
+                <template x-for="item in lcHistory" :key="item.id">
+                  <tr class="hover:bg-slate-50">
+                    <td class="p-2.5 font-mono text-slate-500" x-text="item.id"></td>
+                    <td class="p-2.5 font-mono font-bold text-slate-900" x-text="item.name"></td>
+                    <td class="p-2.5 text-slate-600" x-text="item.date || 'N/A'"></td>
+                    <td class="p-2.5">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold" :class="{
+                              'bg-emerald-100 text-emerald-800': item.state === 'done',
+                              'bg-amber-100 text-amber-800': item.state === 'draft',
+                              'bg-slate-100 text-slate-700': item.state === 'cancel'
+                            }" x-text="item.state"></span>
+                    </td>
+                    <td class="p-2.5 text-right font-mono" x-text="(item.x_studio_peso_total_de_costeo || 0) + ' Kg'">
+                    </td>
+                    <td class="p-2.5 text-right font-mono"
+                      x-text="formatMoney(item.x_studio_cambio_gastos || 0) + ' Gs'"></td>
+                    <td class="p-2.5 text-right font-mono font-bold text-slate-900"
+                      x-text="formatMoney(item.amount_total) + ' Gs'"></td>
+                    <td class="p-2.5 text-center">
+                      <template x-if="item.is_defective">
+                        <span class="px-2 py-0.5 bg-rose-100 text-rose-800 rounded-full text-[10px] font-bold">⚠️
+                          Defectuoso</span>
+                      </template>
+                      <template x-if="!item.is_defective">
+                        <span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold">✅
+                          Consistente</span>
+                      </template>
+                    </td>
+                    <td class="p-2.5 text-center">
+                      <button type="button" @click="loadLCIntoSanitizer(item.id)"
+                        class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded text-[11px] font-bold">
+                        Auditar / Sanear
+                      </button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div> <!-- FIN SUB-TAB 3 -->
+

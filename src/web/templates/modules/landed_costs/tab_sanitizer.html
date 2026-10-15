@@ -1,0 +1,84 @@
+      <!-- SUB-TAB 2: SANEAMIENTO DE COSTEOS DEFECTUOSOS -->
+      <div x-show="lcSubTab === 'sanitizer'" class="space-y-6">
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+          <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+            <div class="flex items-center gap-2 text-slate-900 font-bold text-base">
+              <i class="fa-solid fa-shield-halved text-amber-600"></i>
+              <span>Auditoría Forense & Saneamiento de Costeos Defectuosos</span>
+            </div>
+            <span
+              class="text-xs px-2.5 py-1 bg-rose-50 text-rose-800 rounded-md font-mono font-medium border border-rose-200">
+              account.move.reversal
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end mb-4">
+            <div class="md:col-span-8">
+              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">ID o Referencia del Landed Cost a
+                Remediar *</label>
+              <input type="number" x-model.number="sanitizerTargetId"
+                placeholder="Ej: 4 (para LC/2026/0004) o 5 (para LC/2026/0005)"
+                class="w-full py-2.5 px-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500 text-sm font-bold bg-white">
+            </div>
+            <div class="md:col-span-4">
+              <button type="button" @click="analyzeForSanitizer(sanitizerTargetId)"
+                :disabled="!sanitizerTargetId || isAnalyzingLC"
+                class="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all">
+                <template x-if="isAnalyzingLC">
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                </template>
+                <template x-if="!isAnalyzingLC">
+                  <i class="fa-solid fa-stethoscope"></i>
+                </template>
+                <span>Auditar Registro Defectuoso</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- DIAGNÓSTICO FORENSE -->
+          <div x-show="sanitizerAnalysis" class="mt-4 pt-4 border-t border-slate-100 space-y-4">
+            <div class="p-4 rounded-xl border"
+              :class="sanitizerAnalysis?.is_defective ? 'bg-rose-50/70 border-rose-200 text-rose-900' : 'bg-emerald-50/70 border-emerald-200 text-emerald-900'">
+              <div class="flex items-center gap-2 font-bold text-sm mb-2">
+                <i
+                  :class="sanitizerAnalysis?.is_defective ? 'fa-solid fa-triangle-exclamation text-rose-600' : 'fa-solid fa-circle-check text-emerald-600'"></i>
+                <span
+                  x-text="sanitizerAnalysis?.is_defective ? '¡Defectos Críticos Detectados en el Registro!' : 'El registro parece consistente.'"></span>
+              </div>
+              <div class="text-xs space-y-1">
+                <div>Registro: <b class="font-mono"
+                    x-text="sanitizerAnalysis?.name + ' (ID ' + sanitizerAnalysis?.id + ')'"></b> | Estado: <span
+                    class="font-bold" x-text="sanitizerAnalysis?.state"></span></div>
+                <div x-show="sanitizerAnalysis?.has_equal_split" class="text-rose-700 font-bold">• Utilizó método
+                  'equal' prorrateando montos idénticos sin considerar peso ni FOB.</div>
+                <div x-show="sanitizerAnalysis?.has_zero_studio" class="text-rose-700 font-bold">• Faltan variables
+                  Studio (peso o cambio de gastos en 0).</div>
+                <div x-show="sanitizerAnalysis?.account_move">
+                  • Asiento Contable Vinculado: <b class="font-mono" x-text="sanitizerAnalysis?.account_move?.name"></b>
+                  (Monto: <span x-text="formatMoney(sanitizerAnalysis?.account_move?.amount_total) + ' Gs'"></span>,
+                  Estado: <span class="font-bold" x-text="sanitizerAnalysis?.account_move?.state"></span>)
+                </div>
+              </div>
+            </div>
+
+            <div class="flex justify-end gap-3 pt-2">
+              <button type="button" @click="executeSanitizerPipeline(true)" :disabled="isSanitizing"
+                class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl flex items-center gap-2">
+                <i class="fa-solid fa-vial"></i>
+                <span>Simular Saneamiento (Dry-Run)</span>
+              </button>
+              <button type="button" @click="executeSanitizerPipeline(false)" :disabled="isSanitizing"
+                class="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-sm">
+                <template x-if="isSanitizing">
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                </template>
+                <template x-if="!isSanitizing">
+                  <i class="fa-solid fa-bolt"></i>
+                </template>
+                <span>Ejecutar Saneamiento & Reversión Contable</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div> <!-- FIN SUB-TAB 2 -->
+

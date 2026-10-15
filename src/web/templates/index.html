@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Odoo 18 - Gestor & Sincronizador de Precios</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Alpine.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] {
+      display: none !important;
+    }
+
+    /* Ocultar aumentador / disminuidor (flechas spinners) en todos los inputs numéricos */
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button {
+      -webkit-appearance: none !important;
+      margin: 0 !important;
+    }
+    input[type=number] {
+      -moz-appearance: textfield !important;
+      appearance: textfield !important;
+    }
+
+    /* Estilo para tabla fija */
+    .table-container {
+      max-height: calc(100vh - 460px);
+      min-height: 300px;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-800 min-h-screen pb-24" x-data="priceApp()" x-init="initApp()" x-cloak>
+
+  <!-- Topbar Header -->
+
+  {% include "components/header.html" %}
+
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+    {% include "modules/pricelists/index.html" %}
+    {% include "modules/landed_costs/index.html" %}
+  </main>
+
+  {% include "components/scripts.html" %}
+</body>
+
+</html>

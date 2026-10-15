@@ -1,0 +1,689 @@
+    <div x-show="activeModule === 'pricelists'" class="space-y-6">
+
+      <!-- SECCIÓN 1: DESTINO EN ODOO (CREAR NUEVA O ACTUALIZAR EXISTENTE) -->
+      <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+        <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+          <div class="flex items-center gap-2 text-slate-900 font-bold text-base">
+            <i class="fa-solid fa-bullseye text-indigo-600"></i>
+            <span>1. Objetivo en Odoo: ¿Crear Nueva Lista o Actualizar una Actual?</span>
+          </div>
+          <span class="text-xs px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md font-mono font-medium">
+            product.pricelist
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-5">
+          <!-- Selector Modo: Nueva vs Actual -->
+          <div class="md:col-span-12 flex flex-col sm:flex-row gap-3">
+            <label class="flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all flex-1"
+              :class="pricelistMode === 'new' ? 'border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-500/20 text-indigo-950 font-semibold' : 'border-slate-200 hover:border-slate-300 bg-white'">
+              <input type="radio" value="new" x-model="pricelistMode"
+                class="text-indigo-600 focus:ring-indigo-500 w-4 h-4">
+              <div>
+                <div class="flex items-center gap-2">
+                  <i class="fa-solid fa-plus-circle text-indigo-600"></i>
+                  <span class="text-sm font-bold">Crear un Nuevo Registro de Lista de Precios</span>
+                </div>
+                <p class="text-xs font-normal text-slate-500 mt-0.5">Crea una tarifa nueva en Odoo (ej. <b
+                    class="text-slate-700">"PRECIO SUGERIDO PUBLICO"</b>)</p>
+              </div>
+            </label>
+
+            <label class="flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all flex-1"
+              :class="pricelistMode === 'existing' ? 'border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-500/20 text-indigo-950 font-semibold' : 'border-slate-200 hover:border-slate-300 bg-white'">
+              <input type="radio" value="existing" x-model="pricelistMode"
+                class="text-indigo-600 focus:ring-indigo-500 w-4 h-4">
+              <div>
+                <div class="flex items-center gap-2">
+                  <i class="fa-solid fa-pen-to-square text-indigo-600"></i>
+                  <span class="text-sm font-bold">Actualizar Lista de Precios Existente</span>
+                </div>
+                <p class="text-xs font-normal text-slate-500 mt-0.5">Modifica o añade reglas a una tarifa que ya existe
+                  en Odoo</p>
+              </div>
+            </label>
+          </div>
+
+          <!-- Si es Crear Nueva -->
+          <div class="md:col-span-6" x-show="pricelistMode === 'new'">
+            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nombre de la Nueva Lista de Precios
+              *</label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-indigo-500">
+                <i class="fa-solid fa-tag"></i>
+              </span>
+              <input type="text" x-model="newPricelistName" placeholder="PRECIO SUGERIDO PUBLICO"
+                class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 text-sm font-bold text-slate-800 bg-white">
+            </div>
+          </div>
+
+          <!-- Si es Actualizar Existente -->
+          <div class="md:col-span-6" x-show="pricelistMode === 'existing'">
+            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Seleccionar Lista de Precios en
+              Odoo *</label>
+            <select x-model="selectedPricelistId"
+              class="w-full py-2.5 px-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 text-sm font-medium bg-white">
+              <option value="">-- Seleccionar Tarifa de Odoo --</option>
+              <template x-for="pl in pricelists" :key="pl.id">
+                <option :value="pl.id"
+                  x-text="`${pl.name} (${pl.currency_id ? pl.currency_id[1] : 'PYG'}) - ${pl.item_count} items`">
+                </option>
+              </template>
+            </select>
+          </div>
+
+          <!-- Moneda -->
+          <div class="md:col-span-3">
+            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Moneda *</label>
+            <select x-model.number="selectedCurrencyId"
+              class="w-full py-2.5 px-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 text-sm font-bold text-slate-800 bg-white">
+              <template x-for="c in currencies" :key="c.id">
+                <option :value="c.id" x-text="`${c.name} (${c.symbol})`" :selected="c.id === 157"></option>
+              </template>
+            </select>
+          </div>
+
+          <!-- Empresa -->
+          <div class="md:col-span-3">
+            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Empresa</label>
+            <input type="text" value="Mergal SA" disabled
+              class="w-full py-2.5 px-3 rounded-xl border border-slate-200 bg-slate-100 text-slate-500 text-sm font-medium">
+          </div>
+
+          <!-- Checkbox: Actualizar también el precio base -->
+          <div class="md:col-span-12">
+            <label
+              class="inline-flex items-center gap-3 p-3 bg-amber-50/70 border border-amber-200 rounded-xl cursor-pointer w-full">
+              <input type="checkbox" x-model="updateBasePrice"
+                class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500">
+              <div>
+                <span class="text-xs font-bold text-amber-900">Actualizar también el Precio de Venta base (list_price)
+                  del producto en el catálogo general</span>
+                <p class="text-[11px] text-amber-700">Por defecto sólo se actualiza la regla de la Lista de Precios.
+                  Activa esto si además quieres modificar la ficha principal del producto.</p>
+              </div>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECCIÓN 2: CONSULTAR Y ESTIRAR PRODUCTOS DESDE ODOO O ARCHIVO -->
+      <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+        <div
+          class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-slate-100 gap-2">
+          <div class="flex items-center gap-2 text-slate-900 font-bold text-base">
+            <i class="fa-solid fa-boxes-stacked text-indigo-600"></i>
+            <span>2. Estirar Productos desde Odoo (o Archivo Opcional)</span>
+          </div>
+
+          <!-- Selector de Modo de Carga -->
+          <div class="flex flex-wrap bg-slate-100 p-1 rounded-xl text-xs font-semibold gap-1">
+            <button @click="sourceTab = 'catalog'"
+              :class="sourceTab === 'catalog' ? 'bg-white shadow-sm text-indigo-900 font-bold' : 'text-slate-600'"
+              class="px-3 py-1.5 rounded-lg transition-all">
+              <i class="fa-solid fa-warehouse mr-1 text-indigo-600"></i> Consultar Inventario
+            </button>
+            <button @click="sourceTab = 'codes'"
+              :class="sourceTab === 'codes' ? 'bg-white shadow-sm text-indigo-900 font-bold' : 'text-slate-600'"
+              class="px-3 py-1.5 rounded-lg transition-all">
+              <i class="fa-solid fa-paste mr-1 text-purple-600"></i> Pegar Lista de Códigos
+            </button>
+            <button @click="sourceTab = 'pricelist'"
+              :class="sourceTab === 'pricelist' ? 'bg-white shadow-sm text-indigo-900 font-bold' : 'text-slate-600'"
+              class="px-3 py-1.5 rounded-lg transition-all">
+              <i class="fa-solid fa-list-ol mr-1 text-blue-600"></i> Desde otra Lista de Precios
+            </button>
+            <button @click="sourceTab = 'file'"
+              :class="sourceTab === 'file' ? 'bg-white shadow-sm text-indigo-900 font-bold' : 'text-slate-600'"
+              class="px-3 py-1.5 rounded-lg transition-all">
+              <i class="fa-solid fa-file-excel mr-1 text-emerald-600"></i> Subir Excel / CSV
+            </button>
+          </div>
+        </div>
+
+        <!-- MODO 1: Consultar Inventario de Odoo (con Motor Tabla Hash y Búsqueda Masiva) -->
+        <div x-show="sourceTab === 'catalog'" class="space-y-4">
+
+          <!-- Barra de herramientas: Selector de Submodo (Rápida vs Masiva) y Estado de la Tabla Hash -->
+          <div
+            class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
+            <div class="inline-flex bg-white p-1 rounded-lg border border-slate-200 text-xs font-semibold shadow-xs">
+              <button @click="inventorySearchMode = 'quick'"
+                :class="inventorySearchMode === 'quick' ? 'bg-indigo-600 text-white shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'"
+                class="px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <span>Búsqueda Rápida</span>
+              </button>
+              <button @click="inventorySearchMode = 'bulk'"
+                :class="inventorySearchMode === 'bulk' ? 'bg-indigo-600 text-white shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'"
+                class="px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-bolt text-amber-300"></i>
+                <span>Búsqueda Masiva por Listado</span>
+                <span
+                  class="px-1.5 py-0.5 bg-amber-400 text-slate-900 text-[10px] font-extrabold rounded-full">HASH</span>
+              </button>
+            </div>
+
+            <!-- Estado y Recarga de la Tabla Hash en Memoria -->
+            <div class="flex items-center gap-2 text-xs">
+              <div
+                class="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200 text-slate-600 font-medium text-[11px] shadow-xs">
+                <i class="fa-solid fa-bolt text-amber-500" :class="cacheInfo.is_loaded ? '' : 'animate-pulse'"></i>
+                <span>Tabla Hash:</span>
+                <b class="text-indigo-700"
+                  x-text="cacheInfo.is_loaded ? (cacheInfo.item_count + ' items') : 'Pendiente cargar'"></b>
+                <template x-if="cacheInfo.loaded_at">
+                  <span class="text-slate-400 hidden md:inline"
+                    x-text="`(${cacheInfo.loaded_at.split(' ')[1]})`"></span>
+                </template>
+              </div>
+              <button @click="refreshCache()" :disabled="isRefreshingCache"
+                title="Recargar catálogo desde Odoo y reconstruir Tabla Hash"
+                class="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer">
+                <i class="fa-solid fa-rotate"
+                  :class="isRefreshingCache ? 'fa-spin text-indigo-600' : 'text-slate-500'"></i>
+                <span class="text-[11px]" x-text="isRefreshingCache ? 'Actualizando...' : 'Refrescar Catálogo'"></span>
+              </button>
+            </div>
+          </div>
+
+          <!-- SUBMODO A: Búsqueda Rápida Individual / Catálogo -->
+          <div x-show="inventorySearchMode === 'quick'" class="space-y-2">
+            <p class="text-xs text-slate-500">
+              Busca por nombre, modelo, referencia interna o barcode con respuesta instantánea.
+              <span class="text-indigo-600 font-semibold">(Si pegas varias líneas o una lista, se activará la Búsqueda
+                Masiva automáticamente)</span>.
+            </p>
+            <div class="flex flex-col sm:flex-row gap-2">
+              <div class="relative flex-1">
+                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                </span>
+                <input type="text" x-model="searchQuery" @keyup.enter="pullFromInventory()"
+                  @paste="handleQuickSearchPaste($event)"
+                  placeholder="Ej: OUKITEL, XIAOMI, REDRAGON, 1002706, o deja vacío para traer catálogo..."
+                  class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 text-sm">
+              </div>
+              <select x-model.number="pullLimit"
+                class="py-2.5 px-3 rounded-xl border border-slate-300 text-xs font-semibold bg-white">
+                <option value="50">Traer 50 productos</option>
+                <option value="100">Traer 100 productos</option>
+                <option value="250">Traer 250 productos</option>
+                <option value="500">Traer 500 productos</option>
+                <option value="2000">Traer Todo el Inventario</option>
+              </select>
+              <button @click="pullFromInventory()" :disabled="isLoadingInventory"
+                class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer">
+                <i class="fa-solid fa-arrow-down" :class="isLoadingInventory ? 'fa-bounce' : ''"></i>
+                <span x-text="isLoadingInventory ? 'Consultando en Memoria...' : 'Estirar Productos a la Tabla'"></span>
+              </button>
+            </div>
+
+            <!-- Feedback de Búsqueda Rápida -->
+            <template x-if="quickSearchFeedback">
+              <div class="p-2.5 rounded-xl text-xs flex items-center justify-between transition-all"
+                :class="quickSearchFeedback.success ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-amber-50 border border-amber-200 text-amber-800'">
+                <div class="flex items-center gap-2">
+                  <i class="fa-solid"
+                    :class="quickSearchFeedback.success ? 'fa-circle-check text-emerald-600' : 'fa-circle-exclamation text-amber-600'"></i>
+                  <span x-text="quickSearchFeedback.message"></span>
+                </div>
+                <button @click="quickSearchFeedback = null"
+                  class="text-slate-400 hover:text-slate-600 text-xs px-1 cursor-pointer">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+            </template>
+          </div>
+
+          <!-- SUBMODO B: Búsqueda Masiva por Listado (Tabla Hash ⚡) -->
+          <div x-show="inventorySearchMode === 'bulk'" class="space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs text-slate-500">
+              <p>Pega un listado de productos de Excel, WhatsApp o bloc de notas (códigos, barcodes o nombres). ¡Soporta
+                copiar 2 columnas de Excel [Código y Precio nuevo]!</p>
+              <span class="font-semibold text-slate-700">Separadores: <code
+                  class="bg-slate-100 px-1 py-0.5 rounded text-indigo-700">Enter</code>, <code
+                  class="bg-slate-100 px-1 py-0.5 rounded text-indigo-700">Tabulador</code> o <code
+                  class="bg-slate-100 px-1 py-0.5 rounded text-indigo-700">Comas</code></span>
+            </div>
+
+            <div class="relative">
+              <textarea x-model="bulkListText" rows="4"
+                placeholder="Pega tu listado de productos aquí...&#10;1002706&#10;OUK-BT103-BLACK&#9;250000 (código + precio desde Excel)&#10;6950376707031&#10;XIAOMI REDMI NOTE 13"
+                class="w-full p-3.5 rounded-xl border border-slate-300 font-mono text-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"></textarea>
+              <template x-if="bulkListText.trim()">
+                <button @click="bulkListText = ''"
+                  class="absolute top-2 right-2 px-2 py-1 bg-slate-200/80 hover:bg-slate-300 text-slate-600 text-[11px] rounded-lg font-medium transition-all cursor-pointer">
+                  <i class="fa-solid fa-xmark mr-1"></i> Borrar
+                </button>
+              </template>
+            </div>
+
+            <!-- Opciones y Acciones de la Búsqueda Masiva -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+              <div class="flex flex-wrap items-center gap-3 text-xs">
+                <!-- Contador Dinámico -->
+                <div
+                  class="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-lg font-bold">
+                  <i class="fa-solid fa-list-check"></i>
+                  <span>Detectados: <b x-text="countBulkListItems()"></b> items</span>
+                </div>
+
+                <!-- Modo de Coincidencia -->
+                <div class="flex items-center gap-3 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200">
+                  <label class="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+                    <input type="radio" x-model="bulkMatchMode" value="smart"
+                      class="text-indigo-600 focus:ring-indigo-500">
+                    <span>Coincidencia Inteligente (Código, Barcode y Nombre)</span>
+                  </label>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+                    <input type="radio" x-model="bulkMatchMode" value="exact_code"
+                      class="text-indigo-600 focus:ring-indigo-500">
+                    <span>Solo Códigos exactos O(1)</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Botón Principal de Búsqueda Masiva -->
+              <button @click="executeBulkSearch()" :disabled="isLoadingBulk || countBulkListItems() === 0"
+                class="px-6 py-2.5 bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer">
+                <i class="fa-solid fa-bolt" :class="isLoadingBulk ? 'fa-bounce text-amber-300' : 'text-amber-300'"></i>
+                <span x-text="isLoadingBulk ? 'Buscando en Tabla Hash...' : 'Consultar Masivamente y Cargar'"></span>
+              </button>
+            </div>
+
+            <!-- Resumen de Resultados y Control de No Encontrados -->
+            <template x-if="bulkResultStats">
+              <div class="p-3.5 bg-slate-50 border rounded-xl space-y-2 transition-all"
+                :class="bulkNotFoundList.length > 0 ? 'border-amber-200 bg-amber-50/40' : 'border-emerald-200 bg-emerald-50/40'">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="inline-flex items-center gap-1 text-emerald-800 font-bold">
+                      <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                      <span>Encontrados y cargados: <b
+                          x-text="bulkResultStats.unique_found_count || bulkResultStats.found_count"></b></span>
+                    </span>
+                    <span class="text-slate-300">•</span>
+                    <span class="text-slate-600 font-medium">
+                      Consultados: <b x-text="bulkResultStats.total_queries"></b>
+                    </span>
+                    <span class="text-slate-300">•</span>
+                    <span
+                      class="inline-flex items-center gap-1 text-indigo-700 font-mono text-[11px] bg-white px-2 py-0.5 rounded border border-indigo-100 font-semibold">
+                      <i class="fa-solid fa-gauge-high"></i>
+                      <span x-text="`${bulkResultStats.execution_time_ms} ms (Tabla Hash)`"></span>
+                    </span>
+                    <template x-if="bulkTargetPricesDetected">
+                      <span
+                        class="inline-flex items-center gap-1 text-purple-700 font-mono text-[11px] bg-purple-50 px-2 py-0.5 rounded border border-purple-200 font-bold">
+                        <i class="fa-solid fa-tag"></i>
+                        <span>¡Precios actualizados desde listado!</span>
+                      </span>
+                    </template>
+                  </div>
+
+                  <template x-if="bulkNotFoundList.length > 0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-amber-800 font-bold text-xs">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-600 mr-1"></i>
+                        <span x-text="`${bulkNotFoundList.length} no encontrados`"></span>
+                      </span>
+                      <button @click="copyNotFoundToClipboard()"
+                        class="px-2.5 py-1 bg-white hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer">
+                        <i class="fa-solid" :class="hasCopiedNotFound ? 'fa-check text-emerald-600' : 'fa-copy'"></i>
+                        <span x-text="hasCopiedNotFound ? '¡Copiados!' : 'Copiar no encontrados'"></span>
+                      </button>
+                      <button @click="bulkResultStats = null"
+                        class="text-slate-400 hover:text-slate-600 text-xs px-1 cursor-pointer">
+                        <i class="fa-solid fa-xmark"></i>
+                      </button>
+                    </div>
+                  </template>
+                </div>
+
+                <!-- Caja Desplegable de Items no encontrados -->
+                <template x-if="bulkNotFoundList.length > 0">
+                  <div class="mt-2 p-2 bg-white rounded-lg border border-amber-200 text-xs">
+                    <p class="text-[11px] font-semibold text-slate-500 mb-1.5">Los siguientes términos no arrojaron
+                      coincidencias en Odoo:</p>
+                    <div class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                      <template x-for="nf in bulkNotFoundList" :key="nf">
+                        <span
+                          class="px-2 py-0.5 bg-rose-50 border border-rose-200 text-rose-800 rounded font-mono text-[11px]"
+                          x-text="nf"></span>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
+
+          </div>
+
+        </div>
+
+        <!-- MODO 2: Pegar Lista de Códigos Masivamente -->
+        <div x-show="sourceTab === 'codes'" class="space-y-3">
+          <p class="text-xs text-slate-500">Pega una lista de <b>Referencias Internas</b> o <b>Códigos de Barras</b>
+            (uno por línea o separados por comas). El sistema buscará en Odoo y los traerá todos de golpe.</p>
+          <textarea x-model="pastedCodes" rows="3"
+            placeholder="1002706&#10;1010923&#10;6950376707031&#10;OUK-BT103-BLACK-GMT"
+            class="w-full p-3 rounded-xl border border-slate-300 font-mono text-xs focus:ring-2 focus:ring-indigo-500"></textarea>
+          <div class="flex justify-between items-center">
+            <span class="text-xs text-slate-400">Total códigos detectados: <b x-text="countPastedCodes()"></b></span>
+            <button @click="pullByCodes()" :disabled="isLoadingCodes || !countPastedCodes()"
+              class="px-5 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-sm">
+              <i class="fa-solid fa-search" :class="isLoadingCodes ? 'fa-spin' : ''"></i>
+              <span x-text="isLoadingCodes ? 'Buscando en Odoo...' : 'Consultar y Cargar Productos'"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- MODO 3: Estirar desde Lista de Precios Existente -->
+        <div x-show="sourceTab === 'pricelist'" class="space-y-3">
+          <p class="text-xs text-slate-500">Clona o modifica productos ya configurados en una tarifa de Odoo. Muy útil
+            para partir de una lista base y crear otra.</p>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <select x-model="sourcePricelistId"
+              class="flex-1 py-2.5 px-3 rounded-xl border border-slate-300 text-sm font-medium bg-white">
+              <option value="">-- Seleccionar Lista Origen --</option>
+              <template x-for="pl in pricelists" :key="pl.id">
+                <option :value="pl.id"
+                  x-text="`${pl.name} (${pl.currency_id ? pl.currency_id[1] : 'PYG'}) - ${pl.item_count} productos`">
+                </option>
+              </template>
+            </select>
+            <button @click="pullFromPricelist()" :disabled="isLoadingPricelist || !sourcePricelistId"
+              class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm">
+              <i class="fa-solid fa-download" :class="isLoadingPricelist ? 'fa-spin' : ''"></i>
+              <span x-text="isLoadingPricelist ? 'Cargando Lista...' : 'Cargar Productos de esta Tarifa'"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- MODO 4: Subir Archivo Excel/CSV -->
+        <div x-show="sourceTab === 'file'" class="space-y-3">
+          <div
+            class="border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-slate-50/50 hover:bg-emerald-50/20 rounded-2xl p-5 text-center transition-all cursor-pointer"
+            @dragover.prevent @drop.prevent="handleFileDrop($event)" @click="$refs.fileInput.click()">
+            <input type="file" x-ref="fileInput" @change="handleFileSelect($event)" accept=".xlsx,.xls,.csv"
+              class="hidden">
+            <div class="max-w-md mx-auto space-y-1">
+              <i class="fa-solid fa-file-excel text-emerald-600 text-2xl"></i>
+              <p class="text-xs font-bold text-slate-700">Arrastra o selecciona tu archivo Excel (.xlsx) o CSV</p>
+              <template x-if="selectedFileName">
+                <div
+                  class="inline-flex items-center gap-2 mt-1 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full text-xs font-bold">
+                  <i class="fa-solid fa-circle-check"></i>
+                  <span x-text="selectedFileName"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+          <div class="flex justify-end">
+            <button @click="processUploadedFile()" :disabled="!selectedFile || isProcessingFile"
+              class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-sm">
+              <i class="fa-solid fa-gears" :class="isProcessingFile ? 'fa-spin' : ''"></i>
+              <span x-text="isProcessingFile ? 'Cruzando...' : 'Cruzar Archivo con Odoo'"></span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECCIÓN 3: TABLA INTERACTIVA DE PRECIOS Y HERRAMIENTAS MASIVAS -->
+      <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden" x-show="items.length > 0">
+
+        <!-- HEADER TABLA + HERRAMIENTAS MASIVAS -->
+        <div class="p-4 bg-slate-900 text-white space-y-3">
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div>
+              <div class="text-sm font-bold flex items-center gap-2">
+                <i class="fa-solid fa-table-list text-amber-400"></i>
+                <span>Productos Cargados (<span x-text="items.length"></span>)</span>
+              </div>
+              <p class="text-xs text-slate-400">Modifica precios masivamente o individualmente en cada fila.</p>
+            </div>
+
+            <!-- Contador, Filtro y Exportar para Aprobación -->
+            <div class="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+              <div class="text-xs">
+                Seleccionados: <b class="text-amber-400 text-sm" x-text="selectedCount"></b> de <span
+                  x-text="items.length"></span>
+              </div>
+              <div class="relative">
+                <input type="text" x-model="filterTerm" placeholder="Filtrar en tabla..."
+                  class="pl-7 pr-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-400 focus:ring-1 focus:ring-indigo-400 w-40 sm:w-48">
+                <i class="fa-solid fa-filter absolute left-2.5 top-2.5 text-slate-400 text-[10px]"></i>
+              </div>
+              <button @click="downloadApprovalExcel()" :disabled="items.length === 0"
+                title="Descarga la planilla Excel con formato ejecutivo para presentar o pedir aprobación a Gerencia"
+                class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 transition-all shadow-xs cursor-pointer whitespace-nowrap">
+                <i class="fa-solid fa-file-excel"></i>
+                <span class="hidden sm:inline">Exportar Planilla Aprobación</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- BARRA DE MODIFICACIÓN MASIVA DE PRECIOS (ULTRA PRÁCTICA) -->
+          <div
+            class="p-3 bg-slate-800/90 rounded-xl border border-slate-700/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="text-slate-400 font-semibold uppercase text-[10px]">Selección:</span>
+              <button @click="selectAll(true)"
+                class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-[11px]">Todos</button>
+              <button @click="selectAll(false)"
+                class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-[11px]">Ninguno</button>
+              <button @click="selectOnlyModified()"
+                class="px-2 py-1 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 rounded border border-amber-500/40 text-[11px]">Modificados</button>
+            </div>
+
+            <!-- Modificadores de Precio -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-slate-400 font-semibold uppercase text-[10px]">Ajuste Masivo sobre Seleccionados:</span>
+
+              <!-- Ajuste % -->
+              <div class="flex items-center bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
+                <input type="number" x-model.number="bulkPercent" placeholder="10"
+                  class="w-14 px-2 py-1 bg-transparent text-white text-xs text-center">
+                <button @click="applyBulkPercent(bulkPercent)"
+                  class="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px]">+ %</button>
+                <button @click="applyBulkPercent(-bulkPercent)"
+                  class="px-2 py-1 bg-rose-600 hover:bg-rose-500 text-white font-bold text-[11px]">- %</button>
+              </div>
+
+              <!-- Ajuste Monto Fijo -->
+              <div class="flex items-center bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
+                <input type="number" x-model.number="bulkAmount" placeholder="5000"
+                  class="w-20 px-2 py-1 bg-transparent text-white text-xs text-center">
+                <button @click="applyBulkAmount(bulkAmount)"
+                  class="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px]">+ Monto</button>
+                <button @click="applyBulkAmount(-bulkAmount)"
+                  class="px-2 py-1 bg-rose-600 hover:bg-rose-500 text-white font-bold text-[11px]">- Monto</button>
+              </div>
+
+              <!-- Redondear a Miles -->
+              <button @click="roundToThousands()"
+                class="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-[11px] flex items-center gap-1">
+                <i class="fa-solid fa-calculator text-amber-400"></i>
+                <span>Redondear a Miles</span>
+              </button>
+
+              <!-- Resetear a Precio Actual -->
+              <button @click="resetToCurrentPrice()"
+                class="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-300 text-[11px]">
+                Restablecer
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TABLA SCROLLABLE -->
+        <div class="overflow-x-auto table-container overflow-y-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead
+              class="bg-slate-100 sticky top-0 z-10 border-b border-slate-200 text-slate-700 uppercase font-semibold text-[11px]">
+              <tr>
+                <th class="p-3 w-10 text-center">
+                  <input type="checkbox" @change="toggleSelectAll($event)"
+                    :checked="selectedCount === filteredItems.length && filteredItems.length > 0"
+                    class="rounded text-indigo-600 focus:ring-indigo-500">
+                </th>
+                <th class="p-3">Ref. Interna</th>
+                <th class="p-3">Código Barras</th>
+                <th class="p-3">Nombre del Producto en Odoo</th>
+                <th class="p-3 text-right">Precio Actual Odoo</th>
+                <th class="p-3 text-right w-36">Nuevo Precio (Tarifa)</th>
+                <th class="p-3 text-right">Variación</th>
+                <th class="p-3 text-center">Estado</th>
+                <th class="p-3 text-center w-12">Quitar</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <template x-for="(item, index) in filteredItems" :key="index">
+                <tr class="hover:bg-slate-50 transition-colors" :class="item.selected ? 'bg-indigo-50/20' : ''">
+                  <!-- Checkbox -->
+                  <td class="p-3 text-center">
+                    <input type="checkbox" x-model="item.selected"
+                      class="rounded text-indigo-600 focus:ring-indigo-500">
+                  </td>
+                  <!-- Ref -->
+                  <td class="p-3 font-mono font-bold text-slate-800" x-text="item.code || '-'"></td>
+                  <!-- Barcode -->
+                  <td class="p-3 font-mono text-slate-500 text-[11px]" x-text="item.barcode || '-'"></td>
+                  <!-- Nombre -->
+                  <td class="p-3">
+                    <div class="font-medium text-slate-900" x-text="item.name"></div>
+                    <template x-if="item.notes">
+                      <span class="text-[10px] text-indigo-600 font-semibold" x-text="item.notes"></span>
+                    </template>
+                  </td>
+                  <!-- Precio Actual -->
+                  <td class="p-3 text-right text-slate-500 font-medium" x-text="formatMoney(item.old_price)"></td>
+                  <!-- Input Nuevo Precio Editable -->
+                  <td class="p-3 text-right">
+                    <input type="number" step="any" x-model.number="item.new_price" @input="recalcDiff(item)"
+                      class="w-32 text-right py-1 px-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 font-bold text-indigo-900 text-xs bg-white">
+                  </td>
+                  <!-- Variación -->
+                  <td class="p-3 text-right font-bold text-xs"
+                    :class="item.diff > 0 ? 'text-emerald-600' : (item.diff < 0 ? 'text-rose-600' : 'text-slate-400')">
+                    <span x-text="formatDiff(item.diff)"></span>
+                  </td>
+                  <!-- Estado -->
+                  <td class="p-3 text-center">
+                    <template x-if="item.diff !== 0">
+                      <span
+                        class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">MODIFICADO</span>
+                    </template>
+                    <template x-if="item.diff === 0">
+                      <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600">SIN
+                        CAMBIO</span>
+                    </template>
+                  </td>
+                  <!-- Quitar de lista -->
+                  <td class="p-3 text-center">
+                    <button @click="removeItem(item)" class="text-slate-300 hover:text-rose-600 transition-colors">
+                      <i class="fa-solid fa-trash-can text-xs"></i>
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- BARRA DE ACCIÓN FIJA INFERIOR -->
+        <div
+          class="p-4 bg-slate-950 text-white flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-800">
+          <div>
+            <div class="text-sm font-bold flex items-center gap-2">
+              <span>Sincronizar <b class="text-amber-400 text-base" x-text="selectedCount"></b> productos
+                seleccionados</span>
+            </div>
+            <div class="text-xs text-slate-400 mt-0.5">
+              Destino: <span class="text-indigo-300 font-semibold"
+                x-text="pricelistMode === 'new' ? `Crear nueva: '${newPricelistName}'` : 'Actualizar lista seleccionada'"></span>
+            </div>
+          </div>
+
+          <button @click="submitSync()" :disabled="selectedCount === 0 || isSyncing"
+            class="w-full sm:w-auto px-8 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+            <i class="fa-solid fa-cloud-arrow-up" :class="isSyncing ? 'fa-spin' : ''"></i>
+            <span x-text="isSyncing ? 'Sincronizando en Odoo 18...' : 'Aplicar y Guardar en Odoo 18'"></span>
+          </button>
+        </div>
+      </section>
+
+      <!-- MODAL DE RESULTADO / ÉXITO -->
+      <div x-show="showResultModal"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" x-cloak>
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+          <div class="w-16 h-16 mx-auto rounded-full flex items-center justify-center text-3xl"
+            :class="(syncResult.created_rules > 0 || syncResult.updated_rules > 0) ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'">
+            <i class="fa-solid"
+              :class="(syncResult.created_rules > 0 || syncResult.updated_rules > 0) ? 'fa-circle-check' : 'fa-triangle-exclamation'"></i>
+          </div>
+          <div class="text-center">
+            <h3 class="text-xl font-bold text-slate-900"
+              x-text="(syncResult.created_rules > 0 || syncResult.updated_rules > 0) ? '¡Sincronización Exitosa en Odoo 18!' : 'Atención en la Sincronización'">
+            </h3>
+            <p class="text-xs text-slate-500 mt-1"
+              x-text="(syncResult.created_rules > 0 || syncResult.updated_rules > 0) ? 'Los registros han sido creados y actualizados correctamente.' : 'Ocurrieron incidencias durante el proceso.'">
+            </p>
+          </div>
+
+          <div class="bg-slate-50 p-4 rounded-2xl space-y-2 text-xs border border-slate-200">
+            <div class="flex justify-between">
+              <span class="text-slate-500">Lista de Precios:</span>
+              <span class="font-bold text-indigo-700"
+                x-text="`${syncResult.pricelist_name || ''} (ID: ${syncResult.pricelist_id || '-'})`"></span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">Reglas Creadas:</span>
+              <span class="font-bold text-emerald-600" x-text="syncResult.created_rules"></span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">Reglas Actualizadas:</span>
+              <span class="font-bold text-amber-600" x-text="syncResult.updated_rules"></span>
+            </div>
+            <div class="flex justify-between" x-show="syncResult.error_rules > 0">
+              <span class="text-slate-500">Errores:</span>
+              <span class="font-bold text-rose-600" x-text="syncResult.error_rules"></span>
+            </div>
+          </div>
+
+          <!-- Lista de errores si los hay -->
+          <template x-if="syncResult.errors && syncResult.errors.length > 0">
+            <div
+              class="p-3 bg-rose-50 border border-rose-200 rounded-xl text-[11px] text-rose-800 max-h-32 overflow-y-auto space-y-1">
+              <div class="font-bold">Detalle de incidencias:</div>
+              <template x-for="err in syncResult.errors" :key="err.tmpl_id">
+                <div x-text="`• ${err.name || 'Producto'}: ${err.error}`"></div>
+              </template>
+            </div>
+          </template>
+
+          <div class="flex flex-col gap-2 pt-2">
+            <!-- Botón Directo a Odoo -->
+            <a :href="syncResult.odoo_link" target="_blank"
+              class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl text-center flex items-center justify-center gap-2 shadow-sm transition-all">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i>
+              <span>Abrir Lista de Precios en Odoo 18</span>
+            </a>
+
+            <!-- Descargar Reporte Excel -->
+            <template x-if="syncResult.report_file">
+              <a :href="`/api/download-report/${syncResult.report_file}`"
+                class="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl text-center flex items-center justify-center gap-2">
+                <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                <span>Descargar Reporte de Auditoría (.xlsx)</span>
+              </a>
+            </template>
+
+            <button @click="showResultModal = false" class="text-slate-400 hover:text-slate-600 text-xs py-1">
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div> <!-- Fin activeModule === 'pricelists' -->

@@ -1,0 +1,23 @@
+      <!-- Sub-Tabs de Navegación del Módulo -->
+      <div class="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
+        <button type="button" @click="lcSubTab = 'costing'"
+          :class="lcSubTab === 'costing' ? 'bg-amber-600 text-white shadow-sm font-bold' : 'bg-white hover:bg-slate-100 text-slate-600 font-medium border border-slate-200'"
+          class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs transition-all">
+          <i class="fa-solid fa-boxes-packing"></i>
+          <span>1. Automatización vía Recepción</span>
+        </button>
+
+        <button type="button" @click="lcSubTab = 'sanitizer'"
+          :class="lcSubTab === 'sanitizer' ? 'bg-amber-600 text-white shadow-sm font-bold' : 'bg-white hover:bg-slate-100 text-slate-600 font-medium border border-slate-200'"
+          class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs transition-all">
+          <i class="fa-solid fa-shield-halved"></i>
+          <span>2. Saneamiento de Costeos Defectuosos</span>
+        </button>
+
+        <button type="button" @click="lcSubTab = 'history'; loadLCHistory()"
+          :class="lcSubTab === 'history' ? 'bg-amber-600 text-white shadow-sm font-bold' : 'bg-white hover:bg-slate-100 text-slate-600 font-medium border border-slate-200'"
+          class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs transition-all">
+          <i class="fa-solid fa-list-check"></i>
+          <span>3. Historial & Diagnóstico</span>
+        </button>
+      </div>

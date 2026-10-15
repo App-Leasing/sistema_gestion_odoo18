@@ -1,0 +1,75 @@
+        <!-- PANEL DE RESULTADOS DE SIMULACIÓN -->
+        <section x-show="simulationData" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div class="flex items-center gap-2 text-slate-900 font-bold text-base">
+              <i class="fa-solid fa-scale-balanced text-indigo-600"></i>
+              <span>Resultado de Simulación de Prorrateo</span>
+            </div>
+            <span
+              class="text-xs px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md font-mono font-bold">
+              Dry-Run: 100% en memoria
+            </span>
+          </div>
+
+          <!-- Métricas Resumen -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div class="text-slate-400 text-[10px] uppercase font-bold">Peso Total Físico</div>
+              <div class="text-base font-bold text-slate-800" x-text="(simulationData?.total_weight_kg || 0) + ' Kg'">
+              </div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div class="text-slate-400 text-[10px] uppercase font-bold">Monto Total FOB</div>
+              <div class="text-base font-bold text-slate-800"
+                x-text="'$ ' + formatMoney(simulationData?.total_fob_usd || 0)"></div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div class="text-slate-400 text-[10px] uppercase font-bold">Gastos Adicionales</div>
+              <div class="text-base font-bold text-amber-700"
+                x-text="formatMoney(simulationData?.total_expense_gs || 0) + ' Gs'"></div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div class="text-slate-400 text-[10px] uppercase font-bold">Líneas Prorrateadas</div>
+              <div class="text-base font-bold text-emerald-700"
+                x-text="(simulationData?.lines?.length || 0) + ' items'"></div>
+            </div>
+          </div>
+
+          <!-- Tabla de Desglose de Simulación -->
+          <div class="overflow-x-auto border border-slate-200 rounded-xl">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead class="bg-slate-100 text-slate-600 uppercase font-semibold text-[10px]">
+                <tr>
+                  <th class="p-2.5">Código</th>
+                  <th class="p-2.5">Producto</th>
+                  <th class="p-2.5 text-right">Cant</th>
+                  <th class="p-2.5 text-right">Peso Un (Kg)</th>
+                  <th class="p-2.5 text-right">FOB Un ($)</th>
+                  <th class="p-2.5 text-right">Gasto Un ($)</th>
+                  <th class="p-2.5 text-right">Costo Final Un ($)</th>
+                  <th class="p-2.5 text-right">Costo Final Un (Gs)</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 bg-white">
+                <template x-for="line in (simulationData?.lines || [])" :key="line.product_id">
+                  <tr class="hover:bg-slate-50">
+                    <td class="p-2.5 font-mono font-bold text-indigo-700" x-text="line.code || 'S/C'"></td>
+                    <td class="p-2.5 font-medium text-slate-800 max-w-xs truncate" x-text="line.name"></td>
+                    <td class="p-2.5 text-right font-bold" x-text="line.quantity"></td>
+                    <td class="p-2.5 text-right text-slate-600" x-text="line.unit_weight_kg"></td>
+                    <td class="p-2.5 text-right text-slate-600"
+                      x-text="'$' + (line.former_cost_unit_usd ? line.former_cost_unit_usd.toFixed(2) : '0.00')"></td>
+                    <td class="p-2.5 text-right text-amber-700 font-semibold"
+                      x-text="'$' + (line.additional_landed_cost_unit_usd ? line.additional_landed_cost_unit_usd.toFixed(2) : '0.00')">
+                    </td>
+                    <td class="p-2.5 text-right text-emerald-700 font-bold"
+                      x-text="'$' + (line.final_cost_unit_usd ? line.final_cost_unit_usd.toFixed(2) : '0.00')"></td>
+                    <td class="p-2.5 text-right font-mono font-bold text-slate-900"
+                      x-text="formatMoney(line.final_cost_unit_gs) + ' Gs'"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </section>
+

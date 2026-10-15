@@ -1,0 +1,18 @@
+<!-- ============================================================== -->
+<!-- MÓDULO 2: COSTOS EN DESTINO Y SANEAMIENTO (LANDED COSTS)       -->
+<!-- ============================================================== -->
+<div x-show="activeModule === 'landed_costs'" class="space-y-6" style="display: none;">
+
+  {% include "modules/landed_costs/subnav.html" %}
+
+  <!-- SUB-TAB 1: AUTOMATIZACIÓN VÍA RECEPCIÓN -->
+  <div x-show="lcSubTab === 'costing'" class="space-y-6">
+    {% include "modules/landed_costs/step1_reception.html" %}
+    {% include "modules/landed_costs/step2_expenses.html" %}
+    {% include "modules/landed_costs/step3_simulation.html" %}
+  </div> <!-- FIN SUB-TAB 1 -->
+
+  {% include "modules/landed_costs/tab_sanitizer.html" %}
+  {% include "modules/landed_costs/tab_history.html" %}
+
+</div> <!-- FIN MÓDULO 2 LANDED COSTS -->

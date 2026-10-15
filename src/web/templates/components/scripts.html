@@ -1,0 +1,1241 @@
+  <script>
+    function priceApp() {
+      return {
+        // Módulo Activo
+        activeModule: 'pricelists', // 'pricelists' | 'landed_costs'
+        lcSubTab: 'costing', // 'costing' | 'sanitizer' | 'history'
+
+        // Estado Módulo Landed Costs
+        lcPickings: [],
+        selectedPickingId: '',
+        selectedPickingObj: null,
+        pickingSearchTerm: '',
+        isPickingDropdownOpen: false,
+        isSearchingRemotePickings: false,
+        expenseProducts: [],
+
+        preflightData: null,
+        isPreflightLoading: false,
+        editedWeights: {},
+        showAllWeights: true,
+        weightEntryMode: 'bulk', // 'bulk' | 'model' | 'manual'
+        bulkWeightsText: '',
+        bulkWeightsFeedback: null,
+        productFilterTerm: '',
+        modelWeightInputs: {},
+        quickUniformWeight: '',
+
+        lcForm: {
+          peso_total_kg: 303.0,
+          tipo_cambio_gastos: 7950,
+          tipo_cambio_usd: 7850,
+          cost_date: new Date().toISOString().slice(0, 10),
+          cost_lines: []
+        },
+
+        simulationData: null,
+        isSimulating: false,
+        isCreatingLC: false,
+        createdLCResult: null,
+
+        lcHistory: [],
+        isLoadingLCHistory: false,
+
+        sanitizerTargetId: '',
+        sanitizerAnalysis: null,
+        isAnalyzingLC: false,
+        isSanitizing: false,
+
+        status: {},
+        pricelists: [],
+        currencies: [
+          { id: 157, name: 'PYG', symbol: 'Gs' },
+          { id: 1, name: 'USD', symbol: '$' }
+        ],
+        pricelistMode: 'new',
+        newPricelistName: 'PRECIO SUGERIDO PUBLICO',
+        selectedPricelistId: '',
+        selectedCurrencyId: 157, // PYG
+        updateBasePrice: false,
+
+
+        // Pestañas de estiramiento
+        sourceTab: 'catalog',
+        searchQuery: '',
+        pullLimit: 50,
+        isLoadingInventory: false,
+
+        // Submodo de Búsqueda de Inventario y Tabla Hash
+        inventorySearchMode: 'quick', // 'quick' o 'bulk'
+        bulkListText: '',
+        bulkMatchMode: 'smart', // 'smart' o 'exact_code'
+        isLoadingBulk: false,
+        bulkResultStats: null,
+        bulkNotFoundList: [],
+        hasCopiedNotFound: false,
+        bulkTargetPricesDetected: false,
+        quickSearchFeedback: null,
+
+        // Estado del Motor Tabla Hash
+        cacheInfo: {
+          is_loaded: false,
+          item_count: 0,
+          loaded_at: null,
+          age_seconds: null
+        },
+        isRefreshingCache: false,
+
+        pastedCodes: '',
+        isLoadingCodes: false,
+
+        sourcePricelistId: '',
+        isLoadingPricelist: false,
+
+        selectedFile: null,
+        selectedFileName: '',
+        isProcessingFile: false,
+
+        // Items y Filtros
+        items: [],
+        filterTerm: '',
+
+        // Ajustes Masivos
+        bulkPercent: 10,
+        bulkAmount: 5000,
+
+        // Sincronización
+        isSyncing: false,
+        showResultModal: false,
+        syncResult: {},
+
+        async initApp() {
+          try {
+            // Status
+            fetch('/api/status').then(r => r.json()).then(d => { if (d) this.status = d; }).catch(() => { });
+            // Pricelists
+            fetch('/api/pricelists').then(r => r.json()).then(d => { if (Array.isArray(d)) this.pricelists = d; }).catch(() => { });
+            // Currencies
+            fetch('/api/currencies').then(r => r.json()).then(d => {
+              if (Array.isArray(d) && d.length > 0) {
+                this.currencies = d;
+                const pyg = this.currencies.find(c => c.name === 'PYG');
+                if (pyg) this.selectedCurrencyId = pyg.id;
+              }
+            }).catch(() => { });
+            // Estado inicial de la Tabla Hash en memoria
+            this.fetchCacheStatus();
+            // Pre-cargar datos de Landed Costs en segundo plano
+            this.loadExpenseProducts();
+            this.loadLCPickings();
+            // Prevenir alteración accidental de números al usar la rueda del mouse (scroll)
+            window.addEventListener('wheel', (e) => {
+              if (document.activeElement && (document.activeElement.type === 'number' || document.activeElement.classList.contains('no-wheel'))) {
+                document.activeElement.blur();
+              }
+            }, { passive: true });
+          } catch (e) {
+            console.error('Error inicializando app:', e);
+          }
+        },
+
+        // Métodos de Tabla Hash y Caché
+        async fetchCacheStatus() {
+          try {
+            const res = await fetch('/api/inventory/cache/status');
+            if (res.ok) {
+              const d = await res.json();
+              if (d) this.cacheInfo = d;
+            }
+          } catch (e) {
+            console.error('Error consultando cache status:', e);
+          }
+        },
+
+        async refreshCache() {
+          this.isRefreshingCache = true;
+          try {
+            const res = await fetch('/api/inventory/cache/refresh', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+              this.cacheInfo = data;
+            } else {
+              alert('Error refrescando catálogo: ' + (data.detail || 'Error desconocido'));
+            }
+          } catch (e) {
+            alert('Error refrescando catálogo: ' + e.message);
+          } finally {
+            this.isRefreshingCache = false;
+          }
+        },
+
+        // Parser inteligente de entradas masivas (soporta Excel con columnas [Código, Precio], WhatsApp, o texto plano)
+        parseBulkInput(text) {
+          if (!text || !text.trim()) return [];
+          const raw = text.trim();
+          let rawLines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+          // Si vino todo en una sola línea sin saltos, verificar si usó comas o punto y coma
+          if (rawLines.length === 1 && !raw.includes('\t')) {
+            if (raw.includes(';') || raw.includes(',')) {
+              const sep = raw.includes(';') ? ';' : ',';
+              rawLines = raw.split(sep).map(l => l.trim()).filter(Boolean);
+            }
+          }
+
+          const parsed = [];
+          for (const line of rawLines) {
+            if (!line || line === '-' || line === '--') continue;
+
+            // Caso 1: Columnas de Excel separadas por tabulador '\t'
+            if (line.includes('\t')) {
+              const cols = line.split('\t').map(c => c.trim()).filter(Boolean);
+              if (cols.length >= 2) {
+                const queryCol = cols[0];
+                const lastCol = cols[cols.length - 1];
+                const cleanNum = lastCol.replace(/[$Gs.\s]/g, '').replace(',', '.');
+                const maybePrice = parseFloat(cleanNum);
+                if (!isNaN(maybePrice) && maybePrice > 0) {
+                  parsed.push({ query: queryCol, targetPrice: maybePrice });
+                  continue;
+                }
+              }
+              parsed.push({ query: cols[0], targetPrice: null });
+              continue;
+            }
+
+            // Caso 2: Código con precio explícito separado por ';' o ',' (ej: "OUK-BT103; 250000")
+            const m = line.match(/^([^;,]+)[;,]\s*([0-9.,]+)\s*$/);
+            if (m) {
+              const q = m[1].trim();
+              const numStr = m[2].replace(/\./g, '').replace(',', '.');
+              const p = parseFloat(numStr);
+              if (!isNaN(p) && p > 0) {
+                parsed.push({ query: q, targetPrice: p });
+                continue;
+              }
+            }
+
+            parsed.push({ query: line, targetPrice: null });
+          }
+          return parsed;
+        },
+
+        // Auto-detección de pegado multilínea o listado en búsqueda rápida
+        handleQuickSearchPaste(e) {
+          const pasted = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+          if (pasted && (pasted.includes('\n') || pasted.includes('\t') || pasted.includes(';') || (pasted.includes(',') && pasted.split(',').length > 1))) {
+            e.preventDefault();
+            this.inventorySearchMode = 'bulk';
+            this.bulkListText = pasted.trim();
+          }
+        },
+
+        countBulkListItems() {
+          return this.parseBulkInput(this.bulkListText).length;
+        },
+
+        // Búsqueda Masiva con Tabla Hash O(1) e Invertida
+        async executeBulkSearch() {
+          const parsedList = this.parseBulkInput(this.bulkListText);
+          if (parsedList.length === 0) return;
+
+          const queries = parsedList.map(p => p.query);
+          const priceMap = {};
+          for (const item of parsedList) {
+            if (item.targetPrice !== null) {
+              priceMap[item.query.toUpperCase()] = item.targetPrice;
+            }
+          }
+
+          this.isLoadingBulk = true;
+          this.bulkResultStats = null;
+          this.bulkNotFoundList = [];
+          this.hasCopiedNotFound = false;
+          this.bulkTargetPricesDetected = Object.keys(priceMap).length > 0;
+
+          try {
+            const res = await fetch('/api/inventory/bulk-search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                queries: queries,
+                match_mode: this.bulkMatchMode,
+                refresh_cache: false
+              })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Error en búsqueda masiva');
+
+            const formatted = data.items.map(p => {
+              const codeKey = (p.code || '').toUpperCase();
+              const barcodeKey = (p.barcode || '').toUpperCase();
+              const targetPrice = priceMap[codeKey] ?? priceMap[barcodeKey] ?? null;
+              const newPrice = targetPrice !== null ? targetPrice : p.list_price;
+              const diff = newPrice - (p.list_price || 0);
+
+              return {
+                tmpl_id: p.tmpl_id,
+                product_id: p.product_id,
+                code: p.code,
+                barcode: p.barcode,
+                name: p.name,
+                old_price: p.list_price,
+                new_price: newPrice,
+                diff: diff,
+                notes: targetPrice !== null ? 'Precio desde listado' : 'Tabla Hash Odoo',
+                selected: true
+              };
+            });
+
+            this.appendUniqueItems(formatted);
+            this.bulkResultStats = data.stats;
+            this.bulkNotFoundList = data.not_found || [];
+            this.fetchCacheStatus();
+          } catch (err) {
+            alert('Error: ' + err.message);
+          } finally {
+            this.isLoadingBulk = false;
+          }
+        },
+
+        copyNotFoundToClipboard() {
+          if (!this.bulkNotFoundList.length) return;
+          const text = this.bulkNotFoundList.join('\n');
+          navigator.clipboard.writeText(text).then(() => {
+            this.hasCopiedNotFound = true;
+            setTimeout(() => { this.hasCopiedNotFound = false; }, 3000);
+          }).catch(err => {
+            alert('No se pudo copiar: ' + err);
+          });
+        },
+
+        // 1. Estirar desde Inventario Odoo
+        async pullFromInventory() {
+          this.isLoadingInventory = true;
+          this.quickSearchFeedback = null;
+          const queryTerm = this.searchQuery.trim();
+          try {
+            const q = encodeURIComponent(queryTerm);
+            const res = await fetch(`/api/inventory/search?q=${q}&limit=${this.pullLimit}`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Error consultando inventario');
+
+            this.appendUniqueItems(data.map(p => ({
+              tmpl_id: p.tmpl_id,
+              product_id: p.product_id,
+              code: p.code,
+              barcode: p.barcode,
+              name: p.name,
+              old_price: p.list_price,
+              new_price: p.list_price,
+              diff: 0,
+              notes: 'Inventario Odoo',
+              selected: true
+            })));
+            this.fetchCacheStatus();
+
+            if (data.length > 0) {
+              this.quickSearchFeedback = {
+                success: true,
+                message: `Se encontraron y estiraron ${data.length} producto(s) a la tabla interactiva.`
+              };
+            } else {
+              this.quickSearchFeedback = {
+                success: false,
+                message: queryTerm ? `No se encontraron coincidencias para "${queryTerm}".` : 'No se encontraron productos en el catálogo.'
+              };
+            }
+          } catch (err) {
+            this.quickSearchFeedback = {
+              success: false,
+              message: 'Error al consultar inventario: ' + err.message
+            };
+          } finally {
+            this.isLoadingInventory = false;
+          }
+        },
+
+        // 2. Estirar por Códigos Pegados
+        countPastedCodes() {
+          return this.parseBulkInput(this.pastedCodes).length;
+        },
+
+        async pullByCodes() {
+          const parsed = this.parseBulkInput(this.pastedCodes);
+          if (parsed.length === 0) return;
+          const list = parsed.map(p => p.query);
+
+          this.isLoadingCodes = true;
+          try {
+            const res = await fetch('/api/inventory/by-codes', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ codes: list })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Error consultando códigos');
+
+            this.appendUniqueItems(data.map(p => ({
+              tmpl_id: p.tmpl_id,
+              product_id: p.product_id,
+              code: p.code,
+              barcode: p.barcode,
+              name: p.name,
+              old_price: p.list_price,
+              new_price: p.list_price,
+              diff: 0,
+              notes: 'Código consultado',
+              selected: true
+            })));
+            this.fetchCacheStatus();
+          } catch (err) {
+            alert('Error: ' + err.message);
+          } finally {
+            this.isLoadingCodes = false;
+          }
+        },
+
+        // 3. Estirar desde Lista de Precios Existente
+        async pullFromPricelist() {
+          if (!this.sourcePricelistId) return;
+          this.isLoadingPricelist = true;
+          try {
+            const res = await fetch(`/api/pricelists/${this.sourcePricelistId}/products`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Error consultando lista');
+
+            this.appendUniqueItems(data.map(p => ({
+              tmpl_id: p.tmpl_id,
+              product_id: p.product_id,
+              code: p.code,
+              barcode: p.barcode,
+              name: p.name,
+              old_price: p.pricelist_price || p.list_price,
+              new_price: p.pricelist_price || p.list_price,
+              diff: 0,
+              notes: 'Desde tarifa existente',
+              selected: true
+            })));
+          } catch (err) {
+            alert('Error: ' + err.message);
+          } finally {
+            this.isLoadingPricelist = false;
+          }
+        },
+
+        // 4. Subir Archivo
+        handleFileSelect(e) {
+          const file = e.target.files[0];
+          if (file) {
+            this.selectedFile = file;
+            this.selectedFileName = file.name;
+          }
+        },
+
+        handleFileDrop(e) {
+          const file = e.dataTransfer.files[0];
+          if (file) {
+            this.selectedFile = file;
+            this.selectedFileName = file.name;
+          }
+        },
+
+        async processUploadedFile() {
+          if (!this.selectedFile) return;
+          this.isProcessingFile = true;
+          const formData = new FormData();
+          formData.append('file', this.selectedFile);
+
+          try {
+            const res = await fetch('/api/upload-file', {
+              method: 'POST',
+              body: formData
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Error procesando archivo');
+
+            const validItems = data.items.filter(it => it.tmpl_id).map(it => ({
+              tmpl_id: it.tmpl_id,
+              product_id: it.product_id,
+              code: it.code,
+              barcode: it.barcode,
+              name: it.name,
+              old_price: it.old_price,
+              new_price: it.new_price !== null ? it.new_price : (it.old_price || 0),
+              diff: it.diff || 0,
+              notes: it.notes || 'Archivo Excel',
+              selected: true
+            }));
+            this.appendUniqueItems(validItems);
+          } catch (err) {
+            alert('Error: ' + err.message);
+          } finally {
+            this.isProcessingFile = false;
+          }
+        },
+
+        // Evitar duplicados al añadir
+        appendUniqueItems(newItems) {
+          let added = 0;
+          for (const item of newItems) {
+            const exists = this.items.find(i => i.tmpl_id === item.tmpl_id);
+            if (!exists) {
+              this.items.push(item);
+              added++;
+            } else {
+              exists.selected = true;
+              if (item.new_price && item.new_price !== exists.new_price) {
+                exists.new_price = item.new_price;
+                this.recalcDiff(exists);
+              }
+            }
+          }
+        },
+
+        removeItem(item) {
+          this.items = this.items.filter(i => i !== item);
+        },
+
+        // Ajustes Masivos
+        applyBulkPercent(percent) {
+          if (!percent) return;
+          const factor = 1 + (percent / 100);
+          this.items.forEach(it => {
+            if (it.selected) {
+              it.new_price = Math.round(it.old_price * factor);
+              this.recalcDiff(it);
+            }
+          });
+        },
+
+        applyBulkAmount(amount) {
+          if (!amount) return;
+          this.items.forEach(it => {
+            if (it.selected) {
+              it.new_price = Math.max(0, it.old_price + amount);
+              this.recalcDiff(it);
+            }
+          });
+        },
+
+        roundToThousands() {
+          this.items.forEach(it => {
+            if (it.selected && it.new_price) {
+              it.new_price = Math.round(it.new_price / 1000) * 1000;
+              this.recalcDiff(it);
+            }
+          });
+        },
+
+        resetToCurrentPrice() {
+          this.items.forEach(it => {
+            if (it.selected) {
+              it.new_price = it.old_price;
+              this.recalcDiff(it);
+            }
+          });
+        },
+
+        recalcDiff(item) {
+          item.diff = (item.new_price || 0) - (item.old_price || 0);
+        },
+
+        // Filtro y Conteo
+        get filteredItems() {
+          if (!this.filterTerm.trim()) return this.items;
+          const term = this.filterTerm.toLowerCase();
+          return this.items.filter(it =>
+            (it.name && it.name.toLowerCase().includes(term)) ||
+            (it.code && it.code.toLowerCase().includes(term)) ||
+            (it.barcode && it.barcode.toLowerCase().includes(term))
+          );
+        },
+
+        get selectedCount() {
+          return this.items.filter(it => it.selected).length;
+        },
+
+        selectAll(val) {
+          this.filteredItems.forEach(it => it.selected = val);
+        },
+
+        selectOnlyModified() {
+          this.items.forEach(it => it.selected = it.diff !== 0);
+        },
+
+        toggleSelectAll(e) {
+          this.selectAll(e.target.checked);
+        },
+
+        formatMoney(val) {
+          if (val === null || val === undefined) return '-';
+          return Number(val).toLocaleString('es-PY');
+        },
+
+        formatDiff(val) {
+          if (!val) return '0';
+          const prefix = val > 0 ? '+' : '';
+          return prefix + Number(val).toLocaleString('es-PY');
+        },
+
+        // Exportar Planilla Ejecutiva para Aprobación (Gerencia)
+        async downloadApprovalExcel() {
+          if (!this.items.length) {
+            alert('No hay productos en la tabla para exportar.');
+            return;
+          }
+          try {
+            const activePricelistName = this.pricelistMode === 'new'
+              ? (this.newPricelistName || 'Nueva Lista')
+              : (this.pricelists.find(p => p.id === parseInt(this.selectedPricelistId))?.name || 'Lista de Precios');
+
+            const res = await fetch('/api/export-approval-excel', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                pricelist_name: activePricelistName,
+                items: this.items
+              })
+            });
+            if (!res.ok) {
+              const err = await res.json();
+              throw new Error(err.detail || 'Error al generar la planilla');
+            }
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const cleanName = activePricelistName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+            a.download = `aprobacion_${cleanName}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+          } catch (err) {
+            alert('Error al descargar planilla: ' + err.message);
+          }
+        },
+
+        // Enviar a Odoo
+        async submitSync() {
+          const selected = this.items.filter(it => it.selected && it.tmpl_id);
+          if (selected.length === 0) {
+            alert('Por favor selecciona al menos un producto.');
+            return;
+          }
+
+          if (this.pricelistMode === 'new' && !this.newPricelistName.trim()) {
+            alert('Por favor ingresa un nombre para la nueva Lista de Precios.');
+            return;
+          }
+          if (this.pricelistMode === 'existing' && !this.selectedPricelistId) {
+            alert('Por favor selecciona una Lista de Precios existente.');
+            return;
+          }
+
+          const targetName = this.pricelistMode === 'new' ? this.newPricelistName : 'Lista existente';
+          if (!confirm(`¿Confirmas sincronizar ${selected.length} productos en "${targetName}" en Odoo 18?`)) {
+            return;
+          }
+
+          this.isSyncing = true;
+          try {
+            const payload = {
+              mode: this.pricelistMode,
+              pricelist_id: this.pricelistMode === 'existing' ? parseInt(this.selectedPricelistId) : null,
+              new_pricelist_name: this.newPricelistName,
+              currency_id: parseInt(this.selectedCurrencyId),
+              company_id: 1,
+              update_base_price: this.updateBasePrice,
+              items: selected
+            };
+
+            const res = await fetch('/api/sync-pricelist', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Error en sincronización');
+
+            this.syncResult = data;
+            this.showResultModal = true;
+
+            // Recargar listas para actualizar conteos
+            fetch('/api/pricelists').then(r => r.json()).then(pls => this.pricelists = pls);
+
+          } catch (err) {
+            alert('Error en la sincronización: ' + err.message);
+          } finally {
+            this.isSyncing = false;
+          }
+        },
+
+        // -----------------------------------------------------------
+        // MÉTODOS DE COSTOS EN DESTINO Y SANEAMIENTO (LANDED COSTS)
+        // -----------------------------------------------------------
+        onSwitchToLandedCosts() {
+          if (this.lcPickings.length === 0) this.loadLCPickings();
+          if (this.expenseProducts.length === 0) this.loadExpenseProducts();
+          if (this.lcHistory.length === 0) this.loadLCHistory();
+        },
+
+        get filteredPickings() {
+          if (!this.pickingSearchTerm || !this.pickingSearchTerm.trim()) {
+            return this.lcPickings.slice(0, 40);
+          }
+          const term = this.pickingSearchTerm.toLowerCase().trim();
+          return this.lcPickings.filter(p => {
+            const name = (p.name || '').toLowerCase();
+            const orig = (p.origin || '').toLowerCase();
+            const purch = Array.isArray(p.purchase_id) ? (p.purchase_id[1] || '').toLowerCase() : (p.purchase_id || '').toLowerCase();
+            const partner = Array.isArray(p.partner_id) ? (p.partner_id[1] || '').toLowerCase() : '';
+            const date = (p.date_done || '').toLowerCase();
+            return name.includes(term) || orig.includes(term) || purch.includes(term) || partner.includes(term) || date.includes(term);
+          });
+        },
+
+        selectPicking(p) {
+          this.selectedPickingId = p.id;
+          this.selectedPickingObj = p;
+          this.pickingSearchTerm = `${p.name} - ${p.origin || ''}`;
+          this.isPickingDropdownOpen = false;
+          this.onPickingSelected();
+        },
+
+        clearSelectedPicking() {
+          this.selectedPickingId = '';
+          this.selectedPickingObj = null;
+          this.pickingSearchTerm = '';
+          this.isPickingDropdownOpen = true;
+          this.preflightData = null;
+          this.simulationData = null;
+        },
+
+        async searchRemotePickings() {
+          if (!this.pickingSearchTerm || !this.pickingSearchTerm.trim()) return;
+          this.isSearchingRemotePickings = true;
+          try {
+            const q = encodeURIComponent(this.pickingSearchTerm.trim());
+            const res = await fetch(`/api/landed-cost/pickings?q=${q}&limit=50`);
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data)) {
+                data.forEach(item => {
+                  if (!this.lcPickings.find(x => x.id === item.id)) {
+                    this.lcPickings.unshift(item);
+                  }
+                });
+                this.isPickingDropdownOpen = true;
+              }
+            }
+          } catch (err) {
+            console.error('Error buscando recepciones en Odoo:', err);
+          } finally {
+            this.isSearchingRemotePickings = false;
+          }
+        },
+
+        async loadLCPickings() {
+          try {
+            const res = await fetch('/api/landed-cost/pickings');
+            if (res.ok) {
+              this.lcPickings = await res.json();
+              if (this.selectedPickingId) {
+                this.selectedPickingObj = this.lcPickings.find(x => x.id === this.selectedPickingId) || null;
+              }
+            }
+          } catch (err) {
+            console.error('Error cargando recepciones:', err);
+          }
+        },
+
+
+        async loadExpenseProducts() {
+          try {
+            const res = await fetch('/api/landed-cost/expense-products');
+            if (res.ok) {
+              this.expenseProducts = await res.json();
+            }
+          } catch (err) {
+            console.error('Error cargando productos de gasto:', err);
+          }
+        },
+
+        async loadLCHistory() {
+          this.isLoadingLCHistory = true;
+          try {
+            const res = await fetch('/api/landed-cost/history');
+            if (res.ok) {
+              this.lcHistory = await res.json();
+            }
+          } catch (err) {
+            console.error('Error cargando historial de LC:', err);
+          } finally {
+            this.isLoadingLCHistory = false;
+          }
+        },
+
+        onPickingSelected() {
+          this.preflightData = null;
+          this.simulationData = null;
+          this.editedWeights = {};
+          this.bulkWeightsFeedback = null;
+        },
+
+        parseNum(val, fallback = 0) {
+          if (typeof val === 'number') return isNaN(val) ? fallback : val;
+          if (!val) return fallback;
+          const cleaned = String(val).replace(/\s/g, '').replace(',', '.');
+          const n = parseFloat(cleaned);
+          return isNaN(n) ? fallback : n;
+        },
+
+        getSanitizedWeights() {
+          const res = {};
+          for (const [k, v] of Object.entries(this.editedWeights)) {
+            const num = this.parseNum(v);
+            if (num > 0) res[k] = num;
+          }
+          return res;
+        },
+
+        async runPreflight(customWeights = null) {
+          if (!this.selectedPickingId) return;
+          this.isPreflightLoading = true;
+          try {
+            const weightsToSend = customWeights !== null ? customWeights : this.getSanitizedWeights();
+            const payload = {
+              picking_id: parseInt(this.selectedPickingId),
+              product_weights: weightsToSend
+            };
+            const res = await fetch('/api/landed-cost/preflight', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Error en preflight check');
+            this.preflightData = data;
+            if (data.products) {
+              data.products.forEach(p => {
+                const key = p.code || String(p.id);
+                if (this.editedWeights[key] === undefined) {
+                  this.editedWeights[key] = p.weight || 0.0;
+                }
+              });
+            }
+          } catch (err) {
+            alert('Error al auditar recepción: ' + err.message);
+          } finally {
+            this.isPreflightLoading = false;
+          }
+        },
+
+        async saveUpdatedWeights() {
+          const weightsToSend = this.getSanitizedWeights();
+          await this.runPreflight(weightsToSend);
+          alert('¡Pesos actualizados y guardados en las fichas técnicas de Odoo exitosamente!');
+        },
+
+        applyBulkWeightsFromText() {
+          if (!this.bulkWeightsText || !this.bulkWeightsText.trim()) {
+            this.bulkWeightsFeedback = { type: 'error', message: 'El área de texto está vacía. Pega tus datos de Excel primero.' };
+            return;
+          }
+          if (!this.preflightData || !this.preflightData.products || this.preflightData.products.length === 0) {
+            this.bulkWeightsFeedback = { type: 'error', message: 'No hay productos auditados en el albarán actual.' };
+            return;
+          }
+
+          const lines = this.bulkWeightsText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+          let assignedCount = 0;
+          let notFound = [];
+
+          const firstLine = lines[0];
+          const isTwoColumns = firstLine.includes('\t') || firstLine.includes(';') || firstLine.includes(':') || (firstLine.split(/\s{2,}/).length >= 2);
+
+          if (isTwoColumns) {
+            lines.forEach((line) => {
+              let parts = [];
+              if (line.includes('\t')) parts = line.split('\t');
+              else if (line.includes(';')) parts = line.split(';');
+              else if (line.includes(':')) parts = line.split(':');
+              else parts = line.split(/\s{2,}/);
+
+              if (parts.length >= 2) {
+                const key = parts[0].trim();
+                const rawVal = parts[1].trim().replace(/\s/g, '').replace(',', '.');
+                const w = parseFloat(rawVal);
+                if (!isNaN(w) && w > 0) {
+                  let matched = false;
+                  const keyTrim = key.toLowerCase();
+                  const keyNorm = keyTrim.replace(/[^a-z0-9]/g, '');
+
+                  this.preflightData.products.forEach(p => {
+                    const pCode = (p.code || '').toLowerCase();
+                    const pName = (p.name || '').toLowerCase();
+                    const pCodeNorm = pCode.replace(/[^a-z0-9]/g, '');
+                    const pNameNorm = pName.replace(/[^a-z0-9]/g, '');
+
+                    let isMatch = (
+                      pCode === keyTrim ||
+                      (keyTrim.length >= 2 && pCode.includes(keyTrim)) ||
+                      (keyTrim.length >= 2 && pName.includes(keyTrim)) ||
+                      (keyNorm.length >= 2 && (pCodeNorm.includes(keyNorm) || pNameNorm.includes(keyNorm)))
+                    );
+
+                    // Evitar que 'C68' sobreescriba 'C68 PLUS' si la clave no incluye 'plus'
+                    if (isMatch && keyNorm === 'c68' && (pNameNorm.includes('plus') || pCodeNorm.includes('plus'))) {
+                      isMatch = false;
+                    }
+
+                    if (isMatch) {
+                      const codeKey = p.code || String(p.id);
+                      this.editedWeights[codeKey] = w;
+                      matched = true;
+                      assignedCount++;
+                    }
+                  });
+
+                  if (!matched) {
+                    notFound.push(key);
+                  }
+                }
+              }
+            });
+          } else {
+            lines.forEach((line, idx) => {
+              if (idx < this.preflightData.products.length) {
+                const rawVal = line.replace(/\s/g, '').replace(',', '.');
+                const w = parseFloat(rawVal);
+                if (!isNaN(w) && w > 0) {
+                  const p = this.preflightData.products[idx];
+                  const codeKey = p.code || String(p.id);
+                  this.editedWeights[codeKey] = w;
+                  assignedCount++;
+                }
+              }
+            });
+          }
+
+          if (assignedCount > 0) {
+            this.bulkWeightsFeedback = {
+              type: 'success',
+              message: `¡Asignados ${assignedCount} pesos exitosamente!` + (notFound.length > 0 ? ` (${notFound.length} filas no emparejaron: ${notFound.slice(0, 3).join(', ')}...)` : '')
+            };
+          } else {
+            this.bulkWeightsFeedback = {
+              type: 'error',
+              message: 'No se encontraron coincidencias para los datos pegados. Verifica el formato.'
+            };
+          }
+        },
+
+        async pasteWeightsFromClipboard() {
+          try {
+            if (navigator.clipboard && navigator.clipboard.readText) {
+              const text = await navigator.clipboard.readText();
+              if (text && text.trim()) {
+                this.bulkWeightsText = text;
+                this.applyBulkWeightsFromText();
+                return;
+              }
+            }
+            alert('Portapapeles vacío o no accesible. Presiona Ctrl+V dentro del área de texto.');
+          } catch (err) {
+            alert('No se pudo acceder al portapapeles. Presiona Ctrl+V dentro del cuadro de texto.');
+          }
+        },
+
+        getDetectedModels() {
+          if (!this.preflightData || !this.preflightData.products) return [];
+          const map = {};
+          this.preflightData.products.forEach(p => {
+            const name = (p.name || '').trim();
+            const words = name.split(/\s+/);
+            let model = 'Otros';
+            if (words.length > 1 && words[0].toUpperCase() === 'OUKITEL') {
+              model = words[1];
+              if (words.length > 2 && ['PRO', 'ULTRA', 'PLUS', 'MINI'].includes(words[2].toUpperCase())) {
+                model += ' ' + words[2];
+              }
+            } else if (words.length > 0) {
+              model = words[0];
+            }
+            if (!map[model]) {
+              map[model] = {
+                model: model,
+                count: 0,
+                currentWeight: p.weight || 0.0,
+                editedWeight: this.editedWeights[p.code || String(p.id)] || p.weight || 0.0,
+                products: []
+              };
+            }
+            map[model].count++;
+            map[model].products.push(p);
+          });
+          return Object.values(map).sort((a, b) => b.count - a.count);
+        },
+
+        applyWeightToModel(modelName, weightVal) {
+          if (!this.preflightData || !this.preflightData.products) return;
+          const w = this.parseNum(weightVal);
+          if (w <= 0) {
+            alert('Ingresa un peso numérico válido.');
+            return;
+          }
+          let count = 0;
+          const search = modelName.toLowerCase();
+          this.preflightData.products.forEach(p => {
+            const pName = (p.name || '').toLowerCase();
+            const pCode = (p.code || '').toLowerCase();
+            if (pName.includes(search) || pCode.includes(search)) {
+              const key = p.code || String(p.id);
+              this.editedWeights[key] = w;
+              count++;
+            }
+          });
+          this.bulkWeightsFeedback = {
+            type: 'success',
+            message: `¡Asignado peso de ${w} Kg a ${count} productos del modelo ${modelName}!`
+          };
+        },
+
+        resetWeightsToOdoo() {
+          if (!confirm('¿Restablecer todos los pesos a los valores originales de Odoo?')) return;
+          this.editedWeights = {};
+          if (this.preflightData && this.preflightData.products) {
+            this.preflightData.products.forEach(p => {
+              this.editedWeights[p.code || String(p.id)] = p.weight || 0.0;
+            });
+          }
+          this.bulkWeightsFeedback = null;
+        },
+
+        filteredPreflightProducts() {
+          if (!this.preflightData || !this.preflightData.products) return [];
+          if (!this.productFilterTerm || !this.productFilterTerm.trim()) {
+            return this.preflightData.products;
+          }
+          const term = this.productFilterTerm.trim().toLowerCase();
+          return this.preflightData.products.filter(p => {
+            const name = (p.name || '').toLowerCase();
+            const code = (p.code || '').toLowerCase();
+            return name.includes(term) || code.includes(term);
+          });
+        },
+
+        addCostLine() {
+          const defaultProd = this.expenseProducts.length > 0 ? this.expenseProducts[0].id : null;
+          this.lcForm.cost_lines.push({
+            product_id: defaultProd,
+            name: 'Gasto de Importación',
+            price_unit: 0,
+            split_method: 'by_weight',
+            account_id: null
+          });
+        },
+
+        onExpenseProductChange(cl) {
+          const prod = this.expenseProducts.find(p => p.id === cl.product_id);
+          if (prod) {
+            cl.name = prod.name;
+            const pNameUpper = prod.name.toUpperCase();
+            if (pNameUpper.includes('DESPACHO') || pNameUpper.includes('SEGURO') || pNameUpper.includes('TASA') || pNameUpper.includes('ADUANA')) {
+              cl.split_method = 'by_current_cost_price';
+            } else if (pNameUpper.includes('FLETE') || pNameUpper.includes('TRANSPORTE') || pNameUpper.includes('AEREO')) {
+              cl.split_method = 'by_weight';
+            }
+          }
+        },
+
+        removeCostLine(idx) {
+          this.lcForm.cost_lines.splice(idx, 1);
+        },
+
+        applyCostPreset(preset) {
+          if (preset === 'aereo') {
+            this.lcForm.peso_total_kg = 3199.68;
+            this.lcForm.tipo_cambio_gastos = 6097;
+            this.lcForm.tipo_cambio_usd = 6097;
+            const fleteProd = this.expenseProducts.find(p => p.name.toUpperCase().includes('FLETE')) || this.expenseProducts[0];
+            const despachoProd = this.expenseProducts.find(p => p.name.toUpperCase().includes('DESPACHO')) || this.expenseProducts[1] || this.expenseProducts[0];
+            this.lcForm.cost_lines = [
+              {
+                product_id: fleteProd ? fleteProd.id : 85970,
+                name: 'Flete Internacional Aéreo',
+                price_unit: 329321407,
+                split_method: 'by_weight',
+                account_id: null
+              },
+              {
+                product_id: despachoProd ? despachoProd.id : 85997,
+                name: 'Gastos de Despacho Aduanero y Tasas',
+                price_unit: 381387897,
+                split_method: 'by_current_cost_price',
+                account_id: null
+              }
+            ];
+          }
+        },
+
+        calculateTotalExpenseGs() {
+          return this.lcForm.cost_lines.reduce((sum, cl) => sum + (Number(cl.price_unit) || 0), 0);
+        },
+
+        async runSimulation() {
+          if (!this.selectedPickingId) {
+            alert('Seleccione un albarán de recepción.');
+            return;
+          }
+          if (this.lcForm.cost_lines.length === 0) {
+            alert('Agregue al menos una línea de gasto.');
+            return;
+          }
+          this.isSimulating = true;
+          try {
+            const payload = {
+              picking_ids: [parseInt(this.selectedPickingId)],
+              peso_total_kg: this.parseNum(this.lcForm.peso_total_kg),
+              tipo_cambio_gastos: this.parseNum(this.lcForm.tipo_cambio_gastos, 7950.0),
+              tipo_cambio_usd: this.parseNum(this.lcForm.tipo_cambio_usd, 7850.0),
+              cost_date: this.lcForm.cost_date,
+              cost_lines: this.lcForm.cost_lines.map(cl => ({
+                product_id: parseInt(cl.product_id),
+                name: cl.name,
+                price_unit: this.parseNum(cl.price_unit),
+                split_method: cl.split_method,
+                account_id: cl.account_id || null
+              })),
+              product_weights: this.getSanitizedWeights()
+            };
+            const res = await fetch('/api/landed-cost/simulate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Error en simulación');
+            this.simulationData = data;
+          } catch (err) {
+            alert('Error al simular: ' + err.message);
+          } finally {
+            this.isSimulating = false;
+          }
+        },
+
+        async submitLandedCost() {
+          if (!this.selectedPickingId) {
+            alert('Seleccione un albarán de recepción.');
+            return;
+          }
+          if (!confirm(`¿Confirmas crear y computar el Landed Cost en Odoo Staging para el albarán seleccionado?`)) {
+            return;
+          }
+          this.isCreatingLC = true;
+          try {
+            const payload = {
+              picking_ids: [parseInt(this.selectedPickingId)],
+              peso_total_kg: this.parseNum(this.lcForm.peso_total_kg),
+              tipo_cambio_gastos: this.parseNum(this.lcForm.tipo_cambio_gastos, 7950.0),
+              tipo_cambio_usd: this.parseNum(this.lcForm.tipo_cambio_usd, 7850.0),
+              cost_date: this.lcForm.cost_date,
+              cost_lines: this.lcForm.cost_lines.map(cl => ({
+                product_id: parseInt(cl.product_id),
+                name: cl.name,
+                price_unit: this.parseNum(cl.price_unit),
+                split_method: cl.split_method,
+                account_id: cl.account_id || null
+              })),
+              product_weights: this.getSanitizedWeights(),
+              auto_validate: false
+            };
+            const res = await fetch('/api/landed-cost/create', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Error creando Landed Cost');
+            alert(`¡Éxito! Se creó el registro ${data.landed_cost_name} (ID: ${data.landed_cost_id}). Abriendo en Odoo...`);
+            window.open(data.url, '_blank');
+            this.loadLCHistory();
+          } catch (err) {
+            alert('Error al crear Landed Cost: ' + err.message);
+          } finally {
+            this.isCreatingLC = false;
+          }
+        },
+
+        loadLCIntoSanitizer(id) {
+          this.sanitizerTargetId = id;
+          this.lcSubTab = 'sanitizer';
+          this.analyzeForSanitizer(id);
+        },
+
+        async analyzeForSanitizer(id) {
+          if (!id) return;
+          this.isAnalyzingLC = true;
+          this.sanitizerAnalysis = null;
+          try {
+            const res = await fetch(`/api/landed-cost/analyze/${id}`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Error al analizar');
+            this.sanitizerAnalysis = data;
+          } catch (err) {
+            alert('Error en auditoría forense: ' + err.message);
+          } finally {
+            this.isAnalyzingLC = false;
+          }
+        },
+
+        async executeSanitizerPipeline(dryRun = false) {
+          if (!this.sanitizerTargetId) return;
+          if (!dryRun && !confirm(`¿Estás seguro de ejecutar el saneamiento real para el Landed Cost ID ${this.sanitizerTargetId}? Esto revertirá el asiento contable y generará un costeo limpio.`)) {
+            return;
+          }
+          this.isSanitizing = true;
+          try {
+            const payload = {
+              faulty_lc_id: parseInt(this.sanitizerTargetId),
+              dry_run: dryRun,
+              clean_payload: {
+                picking_ids: this.sanitizerAnalysis?.picking_ids || [parseInt(this.selectedPickingId)],
+                peso_total_kg: parseFloat(this.lcForm.peso_total_kg) || 303.0,
+                tipo_cambio_gastos: parseFloat(this.lcForm.tipo_cambio_gastos) || 7950.0,
+                tipo_cambio_usd: parseFloat(this.lcForm.tipo_cambio_usd) || 7850.0,
+                cost_date: this.lcForm.cost_date,
+                cost_lines: this.lcForm.cost_lines.map(cl => ({
+                  product_id: parseInt(cl.product_id),
+                  name: cl.name,
+                  price_unit: parseFloat(cl.price_unit) || 0.0,
+                  split_method: cl.split_method === 'equal' ? 'by_weight' : cl.split_method,
+                  account_id: cl.account_id || null
+                })),
+                product_weights: this.editedWeights
+              }
+            };
+            const res = await fetch('/api/landed-cost/sanitize', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Error en saneamiento');
+            if (dryRun) {
+              alert(`[Dry-Run Exitoso] Se auditaron ${data.simulation?.lines?.length || 0} líneas.`);
+            } else {
+              alert(`[Saneamiento Completado] Se creó el Landed Cost limpio ${data.clean_lc_name} (ID: ${data.clean_lc_id}) y se coordinó la reversión contable.`);
+              if (data.url) window.open(data.url, '_blank');
+              this.loadLCHistory();
+            }
+          } catch (err) {
+            alert('Error al ejecutar saneamiento: ' + err.message);
+          } finally {
+            this.isSanitizing = false;
+          }
+        }
+      }
+    }
+  </script>

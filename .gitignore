@@ -1,0 +1,48 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+ENV/
+
+# Archivos de entorno y credenciales (CRÍTICO: NUNCA SUBIR A GITHUB)
+.env
+.env.*
+*.env
+!.env.example
+
+# Bytecode y caches de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Carpetas de datos y reportes generados en runtime
+reports/*
+!reports/.gitkeep
+data_samples/*
+!data_samples/.gitkeep
+!data_samples/*.sample.*
+
+# Archivos temporales de Office y SO
+~$*.xlsx
+~$*.docx
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Vercel
+.vercel/
+
+# Logs y scripts de auditoría interna
+*.log
+audit_secrets.py
+*.bak
