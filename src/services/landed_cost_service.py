@@ -643,9 +643,13 @@ class LandedCostService:
         self.costing = ReceptionCostingEngine(self.odoo)
         self.sanitizer = LandedCostSanitizer(self.odoo, self.costing)
 
-    def get_incoming_pickings(self, q: str = "", limit: int = 50) -> List[Dict[str, Any]]:
+    def get_incoming_pickings(self, q: str = "", limit: int = 50, company_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Devuelve las últimas recepciones (stock.picking) confirmadas con búsqueda rápida."""
+        from src.core.config import settings
+        target_co = company_id if company_id is not None else settings.ODOO_COMPANY_ID
         domain: List[Any] = [["state", "=", "done"], ["picking_type_code", "=", "incoming"]]
+        if target_co and target_co > 0:
+            domain.append(["company_id", "=", target_co])
         if q and q.strip():
             term = q.strip()
             domain.extend([
@@ -666,12 +670,17 @@ class LandedCostService:
         )
 
 
-    def get_landed_costs_history(self, limit: int = 25) -> List[Dict[str, Any]]:
+    def get_landed_costs_history(self, limit: int = 25, company_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Devuelve el historial de Costes en Destino con diagnóstico de defectos."""
+        from src.core.config import settings
+        target_co = company_id if company_id is not None else settings.ODOO_COMPANY_ID
+        domain: List[Any] = []
+        if target_co and target_co > 0:
+            domain.append(["company_id", "=", target_co])
         records = self.odoo.execute_kw(
             "stock.landed.cost",
             "search_read",
-            [[]],
+            [domain],
             {
                 "fields": [
                     "id",

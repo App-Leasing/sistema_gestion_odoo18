@@ -85,9 +85,13 @@
 
           <!-- Empresa -->
           <div class="md:col-span-3">
-            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Empresa</label>
-            <input type="text" value="Mergal SA" disabled
-              class="w-full py-2.5 px-3 rounded-xl border border-slate-200 bg-slate-100 text-slate-500 text-sm font-medium">
+            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Empresa *</label>
+            <select x-model.number="selectedCompanyId" @change="onCompanyChange()"
+              class="w-full py-2.5 px-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 text-sm font-bold text-slate-800 bg-white">
+              <template x-for="co in companies" :key="co.id">
+                <option :value="co.id" x-text="co.name" :selected="co.id === selectedCompanyId"></option>
+              </template>
+            </select>
           </div>
 
           <!-- Checkbox: Actualizar también el precio base -->

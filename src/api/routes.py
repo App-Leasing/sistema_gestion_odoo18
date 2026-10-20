@@ -62,11 +62,21 @@ def get_status():
         )
 
 
-@router.get("/pricelists")
-def list_pricelists():
-    """Retorna las Listas de Precios existentes en Odoo."""
+@router.get("/companies")
+def list_companies():
+    """Retorna las empresas activas en Odoo."""
     try:
-        return odoo_service.get_pricelists()
+        return odoo_service.get_companies()
+    except Exception as e:
+        logger.error(f"Error listando empresas: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/pricelists")
+def list_pricelists(company_id: Optional[int] = None):
+    """Retorna las Listas de Precios existentes en Odoo filtradas por empresa."""
+    try:
+        return odoo_service.get_pricelists(company_id=company_id)
     except Exception as e:
         logger.error(f"Error listando listas de precios: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -88,6 +98,7 @@ def search_inventory(
     limit: int = 100,
     use_cache: bool = True,
     refresh: bool = False,
+    company_id: Optional[int] = None,
 ):
     """
     Busca productos en el inventario utilizando la Tabla Hash en memoria o Odoo directo.
@@ -95,7 +106,7 @@ def search_inventory(
     """
     try:
         return odoo_service.search_inventory(
-            q, limit=limit, use_cache=use_cache, force_refresh=refresh
+            q, limit=limit, use_cache=use_cache, force_refresh=refresh, company_id=company_id
         )
     except Exception as e:
         logger.error(f"Error buscando en inventario: {e}")
@@ -136,10 +147,11 @@ def get_cache_status():
 
 
 @router.post("/inventory/cache/refresh", response_model=CacheStatusResponse)
-def refresh_cache():
+def refresh_cache(company_id: Optional[int] = None):
     """Fuerza la recarga del catálogo de Odoo y reconstrucción de la Tabla Hash."""
     try:
-        stats = odoo_service.refresh_catalog_cache()
+        odoo_service.fetch_catalog(active_only=True, company_id=company_id)
+        stats = odoo_service.get_cache_stats()
         return CacheStatusResponse(**stats)
     except Exception as e:
         logger.error(f"Error refrescando tabla hash del catálogo: {e}")

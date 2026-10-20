@@ -47,6 +47,8 @@
         isSanitizing: false,
 
         status: {},
+        companies: [{ id: 1, name: 'Mergal SA' }],
+        selectedCompanyId: 1,
         pricelists: [],
         currencies: [
           { id: 157, name: 'PYG', symbol: 'Gs' },
@@ -112,8 +114,16 @@
           try {
             // Status
             fetch('/api/status').then(r => r.json()).then(d => { if (d) this.status = d; }).catch(() => { });
-            // Pricelists
-            fetch('/api/pricelists').then(r => r.json()).then(d => { if (Array.isArray(d)) this.pricelists = d; }).catch(() => { });
+            // Companies
+            fetch('/api/companies').then(r => r.json()).then(d => {
+              if (Array.isArray(d) && d.length > 0) {
+                this.companies = d;
+                const mergal = this.companies.find(c => c.name.toLowerCase().includes('mergal') || c.id === 1);
+                if (mergal) this.selectedCompanyId = mergal.id;
+              }
+            }).catch(() => { });
+            // Pricelists filtradas por Empresa
+            this.loadPricelists();
             // Currencies
             fetch('/api/currencies').then(r => r.json()).then(d => {
               if (Array.isArray(d) && d.length > 0) {
@@ -662,13 +672,31 @@
             this.showResultModal = true;
 
             // Recargar listas para actualizar conteos
-            fetch('/api/pricelists').then(r => r.json()).then(pls => this.pricelists = pls);
+            this.loadPricelists();
 
           } catch (err) {
             alert('Error en la sincronización: ' + err.message);
           } finally {
             this.isSyncing = false;
           }
+        },
+
+        async loadPricelists() {
+          try {
+            const url = this.selectedCompanyId ? `/api/pricelists?company_id=${this.selectedCompanyId}` : '/api/pricelists';
+            const res = await fetch(url);
+            const data = await res.json();
+            if (Array.isArray(data)) {
+              this.pricelists = data;
+            }
+          } catch (e) {
+            console.error('Error cargando listas de precios:', e);
+          }
+        },
+
+        async onCompanyChange() {
+          this.selectedPricelistId = '';
+          await this.loadPricelists();
         },
 
         // -----------------------------------------------------------

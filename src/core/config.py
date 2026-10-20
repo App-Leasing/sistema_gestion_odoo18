@@ -46,6 +46,8 @@ class Settings:
     ODOO_DB: str = os.getenv("ODOO_DB", "").strip()
     ODOO_USERNAME: str = os.getenv("ODOO_USERNAME", "").strip()
     ODOO_PASSWORD: str = os.getenv("ODOO_PASSWORD", "").strip()
+    ODOO_COMPANY_ID: int = int(os.getenv("ODOO_COMPANY_ID", "1"))
+    ODOO_COMPANY_NAME: str = os.getenv("ODOO_COMPANY_NAME", "Mergal SA").strip()
 
     SERVER_HOST: str = os.getenv("SERVER_HOST", "0.0.0.0").strip()
     SERVER_PORT: int = int(os.getenv("SERVER_PORT", "8001"))

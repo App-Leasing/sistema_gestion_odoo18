@@ -96,19 +96,23 @@ class OdooService:
                 raise
 
     def fetch_catalog(
-        self, active_only: bool = True
+        self, active_only: bool = True, company_id: Optional[int] = None
     ) -> Tuple[
         List[Dict[str, Any]], Dict[str, Dict[str, Any]], Dict[str, Dict[str, Any]]
     ]:
         """
-        Descarga el catálogo de productos en una única llamada masiva (Batch Read)
+        Descarga el catálogo de productos filtrado por empresa en Batch Read
         y construye índices en memoria por Referencia Interna (default_code) y Código de Barras (barcode).
         """
         self._ensure_connected()
+        target_company = company_id if company_id is not None else settings.ODOO_COMPANY_ID
 
         domain: List[Any] = []
         if active_only:
             domain.append(["active", "=", True])
+        if target_company and target_company > 0:
+            co_filter = ["|", ["company_id", "=", False], ["company_id", "=", target_company]]
+            domain = ["&"] + domain + [co_filter] if domain else [co_filter]
 
         fields = [
             "id",
@@ -176,13 +180,13 @@ class OdooService:
         self.catalog_index.load(products)
         return products, code_index, barcode_index
 
-    def ensure_catalog_cache(self, force: bool = False) -> None:
+    def ensure_catalog_cache(self, force: bool = False, company_id: Optional[int] = None) -> None:
         """Asegura que el catálogo de productos esté cargado en la tabla hash en memoria de forma thread-safe."""
         if force or not self.catalog_index.is_valid():
             with self._catalog_lock:
                 if force or not self.catalog_index.is_valid():
                     logger.info("Cargando catálogo en caché de Tablas Hash desde Odoo...")
-                    self.fetch_catalog(active_only=True)
+                    self.fetch_catalog(active_only=True, company_id=company_id)
 
     def search_inventory(
         self,
@@ -190,6 +194,7 @@ class OdooService:
         limit: int = 100,
         use_cache: bool = True,
         force_refresh: bool = False,
+        company_id: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """
         Busca productos en el inventario por Referencia, Código de barras o Nombre.
@@ -197,7 +202,7 @@ class OdooService:
         """
         if use_cache:
             try:
-                self.ensure_catalog_cache(force=force_refresh)
+                self.ensure_catalog_cache(force=force_refresh, company_id=company_id)
                 return self.catalog_index.search(query, limit=limit)
             except Exception as e:
                 logger.warning(
@@ -206,19 +211,23 @@ class OdooService:
 
         self._ensure_connected()
 
+        target_company = company_id if company_id is not None else settings.ODOO_COMPANY_ID
         query_clean = query.strip()
+        base_domain: List[Any] = [["active", "=", True]]
+        if target_company and target_company > 0:
+            base_domain = ["&", ["active", "=", True], "|", ["company_id", "=", False], ["company_id", "=", target_company]]
+
         if not query_clean:
-            domain = [["active", "=", True]]
+            domain = base_domain
         else:
-            domain = [
-                "&",
-                ["active", "=", True],
+            search_clause = [
                 "|",
                 ["name", "ilike", query_clean],
                 "|",
                 ["default_code", "ilike", query_clean],
                 ["barcode", "ilike", query_clean],
             ]
+            domain = ["&"] + base_domain + [search_clause]
 
         products = self._models.execute_kw(
             self.db,
@@ -375,12 +384,31 @@ class OdooService:
         return self.catalog_index.get_stats()
 
 
-    def get_pricelists(self) -> List[Dict[str, Any]]:
-        """Obtiene todas las listas de precios configuradas en Odoo."""
+    def get_companies(self) -> List[Dict[str, Any]]:
+        """Obtiene las empresas activas en Odoo."""
+        try:
+            return self.execute_kw(
+                "res.company",
+                "search_read",
+                [[["active", "=", True]]],
+                {"fields": ["id", "name", "currency_id"], "order": "id asc"},
+            )
+        except Exception as e:
+            logger.warning(f"Error obteniendo empresas ({e}), usando fallback.")
+            return [{"id": 1, "name": "Mergal SA"}]
+
+    def get_pricelists(self, company_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Obtiene las listas de precios activas configuradas en Odoo para una empresa."""
+        target_company = company_id if company_id is not None else settings.ODOO_COMPANY_ID
+
+        domain: List[Any] = [["active", "=", True]]
+        if target_company and target_company > 0:
+            domain = ["&", ["active", "=", True], "|", ["company_id", "=", False], ["company_id", "=", target_company]]
+
         pricelists = self.execute_kw(
             "product.pricelist",
             "search_read",
-            [[]],
+            [domain],
             {
                 "fields": [
                     "id",
@@ -389,7 +417,8 @@ class OdooService:
                     "company_id",
                     "item_ids",
                     "active",
-                ]
+                ],
+                "order": "name asc",
             },
         )
         for pl in pricelists:
