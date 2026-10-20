@@ -111,8 +111,7 @@ class OdooService:
         if active_only:
             domain.append(["active", "=", True])
         if target_company and target_company > 0:
-            co_filter = ["|", ["company_id", "=", False], ["company_id", "=", target_company]]
-            domain = ["&"] + domain + [co_filter] if domain else [co_filter]
+            domain.append(["company_id", "in", [False, target_company]])
 
         fields = [
             "id",
@@ -213,21 +212,18 @@ class OdooService:
 
         target_company = company_id if company_id is not None else settings.ODOO_COMPANY_ID
         query_clean = query.strip()
-        base_domain: List[Any] = [["active", "=", True]]
+        domain: List[Any] = [["active", "=", True]]
         if target_company and target_company > 0:
-            base_domain = ["&", ["active", "=", True], "|", ["company_id", "=", False], ["company_id", "=", target_company]]
+            domain.append(["company_id", "in", [False, target_company]])
 
-        if not query_clean:
-            domain = base_domain
-        else:
-            search_clause = [
+        if query_clean:
+            domain.extend([
                 "|",
                 ["name", "ilike", query_clean],
                 "|",
                 ["default_code", "ilike", query_clean],
                 ["barcode", "ilike", query_clean],
-            ]
-            domain = ["&"] + base_domain + [search_clause]
+            ])
 
         products = self._models.execute_kw(
             self.db,
@@ -403,7 +399,7 @@ class OdooService:
 
         domain: List[Any] = [["active", "=", True]]
         if target_company and target_company > 0:
-            domain = ["&", ["active", "=", True], "|", ["company_id", "=", False], ["company_id", "=", target_company]]
+            domain.append(["company_id", "in", [False, target_company]])
 
         pricelists = self.execute_kw(
             "product.pricelist",
